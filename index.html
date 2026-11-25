@@ -43,7 +43,6 @@
       transition: all 0.25s ease;
     }
 
-    /* ----- Login Card Specific ----- */
     .login-card h1 {
       font-size: 2rem;
       font-weight: 600;
@@ -270,7 +269,7 @@
       position: relative;
       overflow: hidden;
       background: #0b1219;
-      touch-action: none; /* we handle all gestures manually */
+      /* NO touch-action: none — we want native iframe scrolling to work */
     }
 
     .iframe-stage {
@@ -292,15 +291,7 @@
       border: 0;
       display: block;
       background: #fff;
-      /* prevent iframe from stealing touch events — gestures handled by wrapper */
-      pointer-events: none;
-    }
-
-    /* On desktop, allow normal iframe interaction (scroll, click, etc.) */
-    @media (min-width: 769px) {
-      .iframe-stage iframe {
-        pointer-events: auto;
-      }
+      pointer-events: auto; /* iframe must receive clicks & scrolls */
     }
 
     /* ----- Mobile: force desktop layout & scale to fit ----- */
@@ -309,6 +300,23 @@
         width: 1024px !important;
         height: 1600px !important;
       }
+    }
+
+    /* ----- Gesture overlay (only active during pinch) ----- */
+    .gesture-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      z-index: 15;
+      display: none; /* shown only when 2+ fingers are down */
+      touch-action: none;
+    }
+
+    .gesture-overlay.active {
+      display: block;
     }
 
     /* Responsive adjustments for login card */
@@ -418,6 +426,8 @@
         <iframe id="sheetIframe"
                 src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTM1w-KU7CTbTDA2iw3jZkQVtK8HNr0kSjMQvITXyUHEEfovbyFBR37_t6h3__C7w/pubhtml?widget=true&amp;headers=false"></iframe>
       </div>
+      <!-- Transparent overlay that captures pinch gestures only -->
+      <div class="gesture-overlay" id="gestureOverlay"></div>
     </div>
   </div>
 
@@ -444,6 +454,7 @@
       const iframeWrapper = document.getElementById('iframeWrapper');
       const iframeStage = document.getElementById('iframeStage');
       const sheetIframe = document.getElementById('sheetIframe');
+      const gestureOverlay = document.getElementById('gestureOverlay');
 
       // ========== PASSWORD TOGGLE ==========
       let passwordVisible = false;
@@ -524,7 +535,7 @@
       window.addEventListener('load', () => usernameInput.focus());
 
       // =====================================================
-      // ZOOM & PAN ENGINE — touch-only on mobile
+      // ZOOM & PAN ENGINE
       // =====================================================
       const zoomState = {
         scale: 1,
@@ -632,79 +643,144 @@
         }
       }
 
-      // ---------- Touch Gestures ----------
-      let activePointers = new Map();
-      let lastPan = null;
+      // =====================================================
+      // GESTURE HANDLING WITH OVERLAY
+      // Strategy:
+      //   - Iframe receives all touches normally (tabs, scroll, click work).
+      //   - Wrapper listens for touchstart. If 2+ touches are detected,
+      //     activate the overlay so we capture the pinch gesture.
+      //   - When touches drop to 0, hide the overlay so iframe is interactive again.
+      // =====================================================
+      let activeTouches = new Map();
       let lastPinchDist = null;
+      let lastPinchCenter = null;
+      let overlayActive = false;
 
-      function getPointerPos(e) {
+      function getTouchPos(touch) {
         const rect = iframeWrapper.getBoundingClientRect();
-        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
       }
 
-      iframeWrapper.addEventListener('pointerdown', (e) => {
-        if (zoomState.mode !== 'mobile') return;
-        iframeWrapper.setPointerCapture(e.pointerId);
-        activePointers.set(e.pointerId, getPointerPos(e));
-
-        if (activePointers.size === 1) {
-          lastPan = getPointerPos(e);
-        } else if (activePointers.size === 2) {
-          const pts = [...activePointers.values()];
-          lastPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-          lastPan = null;
+      function showOverlay() {
+        if (!overlayActive) {
+          overlayActive = true;
+          gestureOverlay.classList.add('active');
         }
-      });
+      }
 
-      iframeWrapper.addEventListener('pointermove', (e) => {
+      function hideOverlay() {
+        if (overlayActive) {
+          overlayActive = false;
+          gestureOverlay.classList.remove('active');
+          lastPinchDist = null;
+          lastPinchCenter = null;
+          activeTouches.clear();
+        }
+      }
+
+      // Listen on the wrapper for touchstart — bubbles up from the iframe
+      iframeWrapper.addEventListener('touchstart', (e) => {
         if (zoomState.mode !== 'mobile') return;
-        if (!activePointers.has(e.pointerId)) return;
-        const pos = getPointerPos(e);
-        activePointers.set(e.pointerId, pos);
 
-        if (activePointers.size === 1 && lastPan) {
-          zoomState.tx += pos.x - lastPan.x;
-          zoomState.ty += pos.y - lastPan.y;
-          lastPan = pos;
-          applyTransform();
-        } else if (activePointers.size === 2 && lastPinchDist) {
-          const pts = [...activePointers.values()];
-          const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-          const center = {
-            x: (pts[0].x + pts[1].x) / 2,
-            y: (pts[0].y + pts[1].y) / 2
+        // Record all active touches
+        for (const touch of e.touches) {
+          activeTouches.set(touch.identifier, getTouchPos(touch));
+        }
+
+        if (e.touches.length >= 2) {
+          // Pinch detected → activate overlay to capture move events
+          showOverlay();
+          const t0 = e.touches[0];
+          const t1 = e.touches[1];
+          const p0 = getTouchPos(t0);
+          const p1 = getTouchPos(t1);
+          lastPinchDist = Math.hypot(p0.x - p1.x, p0.y - p1.y);
+          lastPinchCenter = {
+            x: (p0.x + p1.x) / 2,
+            y: (p0.y + p1.y) / 2
           };
+        }
+      }, { passive: true });
+
+      // Overlay captures pinch moves
+      gestureOverlay.addEventListener('touchstart', (e) => {
+        // Re-seed touches from the overlay (since it took over from iframe)
+        for (const touch of e.touches) {
+          activeTouches.set(touch.identifier, getTouchPos(touch));
+        }
+        if (e.touches.length >= 2) {
+          const t0 = e.touches[0];
+          const t1 = e.touches[1];
+          const p0 = getTouchPos(t0);
+          const p1 = getTouchPos(t1);
+          lastPinchDist = Math.hypot(p0.x - p1.x, p0.y - p1.y);
+          lastPinchCenter = {
+            x: (p0.x + p1.x) / 2,
+            y: (p0.y + p1.y) / 2
+          };
+        }
+      }, { passive: false });
+
+      gestureOverlay.addEventListener('touchmove', (e) => {
+        if (zoomState.mode !== 'mobile') return;
+        e.preventDefault();
+
+        if (e.touches.length >= 2) {
+          const t0 = e.touches[0];
+          const t1 = e.touches[1];
+          const p0 = getTouchPos(t0);
+          const p1 = getTouchPos(t1);
+          const dist = Math.hypot(p0.x - p1.x, p0.y - p1.y);
+          const center = {
+            x: (p0.x + p1.x) / 2,
+            y: (p0.y + p1.y) / 2
+          };
+
           if (lastPinchDist > 0) {
             const factor = dist / lastPinchDist;
+            // Apply zoom around the midpoint between fingers
             setScale(zoomState.scale * factor, center.x, center.y);
+
+            // Pan with the midpoint movement (two-finger drag)
+            if (lastPinchCenter) {
+              zoomState.tx += center.x - lastPinchCenter.x;
+              zoomState.ty += center.y - lastPinchCenter.y;
+              applyTransform();
+            }
           }
           lastPinchDist = dist;
+          lastPinchCenter = center;
         }
-      });
+      }, { passive: false });
 
-      function endPointer(e) {
-        activePointers.delete(e.pointerId);
-        if (activePointers.size === 0) {
-          lastPan = null;
-          lastPinchDist = null;
-        } else if (activePointers.size === 1) {
-          lastPan = [...activePointers.values()][0];
-          lastPinchDist = null;
+      function onPinchEnd(e) {
+        if (e.touches.length < 2) {
+          // Below 2 fingers → stop capturing; hide overlay so iframe is interactive
+          hideOverlay();
         }
       }
 
-      iframeWrapper.addEventListener('pointerup', endPointer);
-      iframeWrapper.addEventListener('pointercancel', endPointer);
-      iframeWrapper.addEventListener('pointerleave', endPointer);
+      gestureOverlay.addEventListener('touchend', onPinchEnd);
+      gestureOverlay.addEventListener('touchcancel', onPinchEnd);
 
-      // Double-tap to toggle zoom
+      // Also detect finger lift on wrapper (in case overlay wasn't active)
+      iframeWrapper.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+          hideOverlay();
+        }
+      }, { passive: true });
+
+      // Double-tap to toggle zoom (only triggers on iframe when not pinching)
       let lastTap = 0;
-      iframeWrapper.addEventListener('pointerup', (e) => {
+      iframeWrapper.addEventListener('touchend', (e) => {
         if (zoomState.mode !== 'mobile') return;
+        if (e.changedTouches.length !== 1) return;
         const now = Date.now();
         if (now - lastTap < 300) {
+          const touch = e.changedTouches[0];
+          const rect = iframeWrapper.getBoundingClientRect();
+          const pos = { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
           const base = computeBaseScale();
-          const pos = getPointerPos(e);
           if (zoomState.scale < base * 1.8) {
             setScale(base * 2.2, pos.x, pos.y);
           } else {
@@ -715,7 +791,7 @@
           }
         }
         lastTap = now;
-      });
+      }, { passive: true });
 
       // ---- Mode watcher ----
       let lastMode = isMobileViewport() ? 'mobile' : 'desktop';
@@ -763,13 +839,6 @@
           initZoom();
         });
       }
-
-      // Prevent native pinch/scroll on wrapper (mobile only)
-      iframeWrapper.addEventListener('touchmove', (e) => {
-        if (zoomState.mode === 'mobile' && e.touches.length > 1) {
-          e.preventDefault();
-        }
-      }, { passive: false });
 
     })();
   </script>
