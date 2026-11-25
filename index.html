@@ -318,11 +318,12 @@
       background: #0b1219;
     }
 
-    /* On mobile, make the wrapper scrollable so zoomed content can be panned */
+    /* On mobile, make the wrapper scrollable in BOTH directions */
     @media (max-width: 768px) {
       .iframe-wrapper {
         overflow: auto;
         -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y;
       }
     }
 
@@ -336,13 +337,16 @@
       will-change: transform;
     }
 
-    /* On mobile, the stage becomes the *scaled* size so the wrapper scrolls */
+    /* On mobile, the stage is a block element whose explicit size is
+       VIRTUAL_W*scale × VIRTUAL_H*scale. This makes the wrapper scroll
+       in BOTH directions. */
     @media (max-width: 768px) {
       .iframe-stage {
         position: relative;
+        display: block;
         width: auto;
         height: auto;
-        display: inline-block;
+        overflow: visible;
       }
     }
 
@@ -358,13 +362,17 @@
       pointer-events: auto;
     }
 
-    /* Mobile: force desktop layout inside the iframe */
+    /* Mobile: iframe is a fixed virtual size; the stage size drives scroll.
+       The iframe is scaled with transform to fill the stage. */
     @media (max-width: 768px) {
       .iframe-stage iframe {
-        position: static;
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 1024px !important;
         height: 1600px !important;
         transform-origin: 0 0;
+        pointer-events: auto;
       }
     }
 
@@ -589,7 +597,7 @@
       window.addEventListener('load', () => usernameInput.focus());
 
       // =====================================================
-      // ZOOM ENGINE (mobile: stage resizes → wrapper scrolls)
+      // ZOOM ENGINE (mobile: stage resizes → wrapper scrolls X+Y)
       // =====================================================
       const zoomState = {
         scale: 1,
@@ -613,6 +621,7 @@
         iframeStage.style.transform = 'none';
         iframeStage.style.width = '';
         iframeStage.style.height = '';
+        sheetIframe.style.transform = 'none';
         iframeWrapper.scrollLeft = 0;
         iframeWrapper.scrollTop = 0;
         updateZoomButtons();
@@ -623,10 +632,8 @@
         return w / VIRTUAL_W;
       }
 
-      // On mobile, the stage is a scaled wrapper around the 1024x1600 iframe.
-      // We set its width/height to 1024*scale × 1600*scale so the scrollable
-      // wrapper knows the real content size. The iframe itself gets
-      // transform: scale(scale) with origin 0 0 so it visually shrinks.
+      // Mobile: stage gets explicit W×H so the wrapper can scroll BOTH ways.
+      // The iframe is 1024×1600 layout size, scaled visually to fill the stage.
       function applyStageSize() {
         if (zoomState.mode !== 'mobile') return;
         const s = zoomState.scale;
@@ -653,11 +660,11 @@
         const clamped = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, oldScale * factor));
         if (Math.abs(clamped - oldScale) < 0.0001) return;
 
-        // Current scroll position + center of visible area (in stage coords)
+        // Scroll position + center of visible area, in current stage coords
         const viewCenterX = iframeWrapper.scrollLeft + iframeWrapper.clientWidth / 2;
         const viewCenterY = iframeWrapper.scrollTop + iframeWrapper.clientHeight / 2;
 
-        // Convert to unscaled stage coordinates (before zoom)
+        // Convert to unscaled stage coords (pre-zoom)
         const stageCX = viewCenterX / oldScale;
         const stageCY = viewCenterY / oldScale;
 
@@ -665,7 +672,7 @@
         applyStageSize();
         updateZoomButtons();
 
-        // After resizing, scroll so the same point stays centered
+        // After resizing, scroll so the same stage point stays centered
         const newScrollX = stageCX * clamped - iframeWrapper.clientWidth / 2;
         const newScrollY = stageCY * clamped - iframeWrapper.clientHeight / 2;
         iframeWrapper.scrollLeft = Math.max(0, newScrollX);
@@ -702,7 +709,7 @@
           lastMode = newMode;
           initZoom();
         } else if (nowMobile && newMode === 'mobile') {
-          // Preserve the visible center across a resize
+          // Preserve visible center across resize
           const oldScale = zoomState.scale;
           const viewCenterX = iframeWrapper.scrollLeft + iframeWrapper.clientWidth / 2;
           const viewCenterY = iframeWrapper.scrollTop + iframeWrapper.clientHeight / 2;
