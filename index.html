@@ -216,6 +216,12 @@
       font-size: 1.4rem;
     }
 
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
     .user-badge {
       background: rgba(63, 126, 240, 0.12);
       padding: 0.45rem 1.1rem;
@@ -262,6 +268,51 @@
       color: #ffb3b3;
     }
 
+    /* ----- Zoom toggle button (now in the top bar) ----- */
+    .zoom-toggle-btn {
+      display: none; /* shown on mobile via media query */
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.45rem 1rem;
+      border-radius: 30px;
+      border: 1px solid #3a4e66;
+      background: transparent;
+      color: #b8c8dd;
+      font-weight: 500;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .zoom-toggle-btn:hover {
+      background: rgba(63, 126, 240, 0.15);
+      border-color: #3f7ef0;
+      color: #c2d6ff;
+    }
+
+    .zoom-toggle-btn:active {
+      transform: scale(0.97);
+    }
+
+    .zoom-toggle-btn.active {
+      background: rgba(63, 126, 240, 0.85);
+      border-color: #6fa4ff;
+      color: #ffffff;
+    }
+
+    .zoom-toggle-btn i {
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      .zoom-toggle-btn {
+        display: flex;
+      }
+    }
+
     /* ----- Iframe container ----- */
     .iframe-wrapper {
       flex: 1;
@@ -306,7 +357,7 @@
       position: absolute;
       inset: 0;
       z-index: 15;
-      display: none; /* toggled by JS */
+      display: none;
       touch-action: none;
       background: transparent;
     }
@@ -316,54 +367,6 @@
     }
     .zoom-overlay.active:active {
       cursor: grabbing;
-    }
-
-    /* ----- Floating zoom mode toggle button (mobile only) ----- */
-    .zoom-toggle {
-      position: absolute;
-      bottom: 1.2rem;
-      right: 1.2rem;
-      z-index: 20;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      gap: 0.45rem;
-      padding: 0.7rem 1.1rem;
-      border-radius: 30px;
-      border: 1px solid #3a5470;
-      background: rgba(20, 32, 48, 0.92);
-      backdrop-filter: blur(8px);
-      color: #d8e6ff;
-      font-weight: 600;
-      font-size: 0.85rem;
-      cursor: pointer;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      transition: background 0.2s, transform 0.1s;
-    }
-    .zoom-toggle:active {
-      transform: scale(0.95);
-    }
-    .zoom-toggle.active {
-      background: rgba(63, 126, 240, 0.9);
-      border-color: #6fa4ff;
-      color: #fff;
-    }
-    .zoom-toggle i {
-      font-size: 0.95rem;
-    }
-
-    @media (max-width: 768px) {
-      .zoom-toggle {
-        display: flex;
-      }
-    }
-
-    /* A subtle hint pulse when entering zoom mode */
-    @keyframes pulseHint {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(63, 126, 240, 0.4); }
-      50% { box-shadow: 0 0 0 10px rgba(63, 126, 240, 0); }
     }
 
     /* Responsive adjustments for login card */
@@ -407,6 +410,12 @@
       }
       .logout-btn span {
         display: none;
+      }
+      .zoom-toggle-btn {
+        padding: 0.45rem 0.9rem;
+      }
+      .zoom-toggle-btn span {
+        display: none; /* keep only icon on very small screens */
       }
     }
 
@@ -456,7 +465,12 @@
         <i class="fas fa-table-columns"></i>
         <span>Data Dashboard</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <div class="topbar-actions">
+        <!-- Zoom toggle button (mobile only, now in the top bar) -->
+        <button class="zoom-toggle-btn" id="zoomToggleBtn" aria-label="Toggle zoom mode">
+          <i class="fas fa-magnifying-glass-plus" id="zoomToggleIcon"></i>
+          <span id="zoomToggleLabel">Zoom</span>
+        </button>
         <div class="user-badge">
           <i class="fas fa-circle-user"></i>
           <span class="username-text" id="displayUsername">User</span>
@@ -476,12 +490,6 @@
 
       <!-- Full-screen overlay that captures all touches when Zoom Mode is ON -->
       <div class="zoom-overlay" id="zoomOverlay"></div>
-
-      <!-- Floating toggle: switch between interactive sheet and zoom mode -->
-      <button class="zoom-toggle" id="zoomToggleBtn" aria-label="Toggle zoom mode">
-        <i class="fas fa-magnifying-glass-plus" id="zoomToggleIcon"></i>
-        <span id="zoomToggleLabel">Zoom</span>
-      </button>
     </div>
   </div>
 
@@ -696,7 +704,7 @@
           zoomState.tx = 0;
           zoomState.ty = 0;
           applyTransform();
-          setZoomMode(false); // start in interactive mode
+          setZoomMode(false);
         } else {
           resetForDesktop();
           setZoomMode(false);
@@ -704,7 +712,7 @@
       }
 
       // =====================================================
-      // ZOOM MODE TOGGLE
+      // ZOOM MODE TOGGLE (button lives in the top bar)
       // =====================================================
       let zoomMode = false;
 
@@ -760,13 +768,11 @@
         activePointers.set(e.pointerId, pos);
 
         if (activePointers.size === 1 && lastPan) {
-          // Single-finger pan
           zoomState.tx += pos.x - lastPan.x;
           zoomState.ty += pos.y - lastPan.y;
           lastPan = pos;
           applyTransform();
         } else if (activePointers.size === 2 && lastPinchDist) {
-          // Pinch zoom + two-finger pan
           const pts = [...activePointers.values()];
           const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
           const center = {
@@ -816,7 +822,7 @@
         lastTap = now;
       });
 
-      // Double-tap on the *iframe* (interactive mode) enters Zoom Mode
+      // Double-tap on the iframe (interactive mode) enters Zoom Mode
       let lastIframeTap = 0;
       iframeWrapper.addEventListener('touchend', (e) => {
         if (zoomMode) return;
@@ -825,7 +831,6 @@
         const now = Date.now();
         if (now - lastIframeTap < 300) {
           setZoomMode(true);
-          // Also do a quick zoom-in so the double tap feels meaningful
           setTimeout(() => {
             const base = computeBaseScale();
             const touch = e.changedTouches[0];
