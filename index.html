@@ -270,7 +270,7 @@
 
     /* ----- Zoom in/out buttons (mobile only, in top bar) ----- */
     .zoom-btn {
-      display: none; /* shown on mobile via media query */
+      display: none;
       align-items: center;
       justify-content: center;
       width: 38px;
@@ -318,6 +318,14 @@
       background: #0b1219;
     }
 
+    /* On mobile, make the wrapper scrollable so zoomed content can be panned */
+    @media (max-width: 768px) {
+      .iframe-wrapper {
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+    }
+
     .iframe-stage {
       position: absolute;
       top: 0;
@@ -326,6 +334,16 @@
       height: 100%;
       transform-origin: 0 0;
       will-change: transform;
+    }
+
+    /* On mobile, the stage becomes the *scaled* size so the wrapper scrolls */
+    @media (max-width: 768px) {
+      .iframe-stage {
+        position: relative;
+        width: auto;
+        height: auto;
+        display: inline-block;
+      }
     }
 
     .iframe-stage iframe {
@@ -340,11 +358,13 @@
       pointer-events: auto;
     }
 
-    /* Mobile: force desktop layout */
+    /* Mobile: force desktop layout inside the iframe */
     @media (max-width: 768px) {
       .iframe-stage iframe {
+        position: static;
         width: 1024px !important;
         height: 1600px !important;
+        transform-origin: 0 0;
       }
     }
 
@@ -439,11 +459,9 @@
         <span>Data Dashboard</span>
       </div>
       <div class="topbar-actions">
-        <!-- Zoom out -->
         <button class="zoom-btn" id="zoomOutBtn" aria-label="Zoom out" disabled>
           <i class="fas fa-minus"></i>
         </button>
-        <!-- Zoom in -->
         <button class="zoom-btn" id="zoomInBtn" aria-label="Zoom in">
           <i class="fas fa-plus"></i>
         </button>
@@ -571,14 +589,12 @@
       window.addEventListener('load', () => usernameInput.focus());
 
       // =====================================================
-      // ZOOM ENGINE (simple scale only — no pan, no overlay)
+      // ZOOM ENGINE (mobile: stage resizes → wrapper scrolls)
       // =====================================================
       const zoomState = {
         scale: 1,
         minScale: 0.2,
         maxScale: 5,
-        tx: 0,
-        ty: 0,
         baseScale: 1,
         mode: 'desktop'
       };
@@ -592,13 +608,13 @@
 
       function resetForDesktop() {
         zoomState.scale = 1;
-        zoomState.tx = 0;
-        zoomState.ty = 0;
         zoomState.baseScale = 1;
         zoomState.mode = 'desktop';
         iframeStage.style.transform = 'none';
-        sheetIframe.style.width = '';
-        sheetIframe.style.height = '';
+        iframeStage.style.width = '';
+        iframeStage.style.height = '';
+        iframeWrapper.scrollLeft = 0;
+        iframeWrapper.scrollTop = 0;
         updateZoomButtons();
       }
 
@@ -607,41 +623,17 @@
         return w / VIRTUAL_W;
       }
 
-      function clampTranslation() {
+      // On mobile, the stage is a scaled wrapper around the 1024x1600 iframe.
+      // We set its width/height to 1024*scale × 1600*scale so the scrollable
+      // wrapper knows the real content size. The iframe itself gets
+      // transform: scale(scale) with origin 0 0 so it visually shrinks.
+      function applyStageSize() {
         if (zoomState.mode !== 'mobile') return;
-
-        const wrapperW = iframeWrapper.clientWidth;
-        const wrapperH = iframeWrapper.clientHeight;
-        const scaledW = VIRTUAL_W * zoomState.scale;
-        const scaledH = VIRTUAL_H * zoomState.scale;
-
-        if (scaledW >= wrapperW) {
-          const minTx = wrapperW - scaledW;
-          zoomState.tx = Math.min(0, Math.max(minTx, zoomState.tx));
-        } else {
-          const centered = (wrapperW - scaledW) / 2;
-          const slack = (wrapperW - scaledW) / 4;
-          zoomState.tx = Math.min(centered + slack, Math.max(centered - slack, zoomState.tx));
-        }
-
-        if (scaledH >= wrapperH) {
-          const minTy = wrapperH - scaledH;
-          zoomState.ty = Math.min(0, Math.max(minTy, zoomState.ty));
-        } else {
-          const slack = (wrapperH - scaledH) / 4;
-          zoomState.ty = Math.min(slack, Math.max(-slack, zoomState.ty));
-        }
-      }
-
-      function applyTransform() {
-        if (zoomState.mode !== 'mobile') {
-          iframeStage.style.transform = 'none';
-          return;
-        }
-        clampTranslation();
-        iframeStage.style.transform =
-          `translate(${zoomState.tx}px, ${zoomState.ty}px) scale(${zoomState.scale})`;
-        updateZoomButtons();
+        const s = zoomState.scale;
+        iframeStage.style.width = (VIRTUAL_W * s) + 'px';
+        iframeStage.style.height = (VIRTUAL_H * s) + 'px';
+        sheetIframe.style.transform = `scale(${s})`;
+        sheetIframe.style.transformOrigin = '0 0';
       }
 
       function updateZoomButtons() {
@@ -654,22 +646,30 @@
         zoomOutBtn.disabled = zoomState.scale <= zoomState.minScale + 0.001;
       }
 
-      // Zoom by a step, keeping the current viewport center fixed.
+      // Zoom around the current scroll center of the wrapper.
       function zoomBy(factor) {
         if (zoomState.mode !== 'mobile') return;
         const oldScale = zoomState.scale;
         const clamped = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, oldScale * factor));
         if (Math.abs(clamped - oldScale) < 0.0001) return;
 
-        const cx = iframeWrapper.clientWidth / 2;
-        const cy = iframeWrapper.clientHeight / 2;
-        const stageX = (cx - zoomState.tx) / oldScale;
-        const stageY = (cy - zoomState.ty) / oldScale;
+        // Current scroll position + center of visible area (in stage coords)
+        const viewCenterX = iframeWrapper.scrollLeft + iframeWrapper.clientWidth / 2;
+        const viewCenterY = iframeWrapper.scrollTop + iframeWrapper.clientHeight / 2;
+
+        // Convert to unscaled stage coordinates (before zoom)
+        const stageCX = viewCenterX / oldScale;
+        const stageCY = viewCenterY / oldScale;
 
         zoomState.scale = clamped;
-        zoomState.tx = cx - stageX * clamped;
-        zoomState.ty = cy - stageY * clamped;
-        applyTransform();
+        applyStageSize();
+        updateZoomButtons();
+
+        // After resizing, scroll so the same point stays centered
+        const newScrollX = stageCX * clamped - iframeWrapper.clientWidth / 2;
+        const newScrollY = stageCY * clamped - iframeWrapper.clientHeight / 2;
+        iframeWrapper.scrollLeft = Math.max(0, newScrollX);
+        iframeWrapper.scrollTop = Math.max(0, newScrollY);
       }
 
       function initZoom() {
@@ -677,15 +677,16 @@
           zoomState.mode = 'mobile';
           zoomState.baseScale = computeBaseScale();
           zoomState.scale = zoomState.baseScale;
-          zoomState.tx = 0;
-          zoomState.ty = 0;
-          applyTransform();
+          applyStageSize();
+          iframeWrapper.scrollLeft = 0;
+          iframeWrapper.scrollTop = 0;
+          updateZoomButtons();
         } else {
           resetForDesktop();
         }
       }
 
-      // Zoom in / out buttons
+      // Buttons
       zoomInBtn.addEventListener('click', () => zoomBy(1.3));
       zoomOutBtn.addEventListener('click', () => zoomBy(1 / 1.3));
 
@@ -701,13 +702,20 @@
           lastMode = newMode;
           initZoom();
         } else if (nowMobile && newMode === 'mobile') {
-          const oldBase = zoomState.baseScale;
-          const newBase = computeBaseScale();
-          if (oldBase > 0) {
-            zoomState.scale = zoomState.scale * (newBase / oldBase);
-          }
-          zoomState.baseScale = newBase;
-          applyTransform();
+          // Preserve the visible center across a resize
+          const oldScale = zoomState.scale;
+          const viewCenterX = iframeWrapper.scrollLeft + iframeWrapper.clientWidth / 2;
+          const viewCenterY = iframeWrapper.scrollTop + iframeWrapper.clientHeight / 2;
+          const stageCX = viewCenterX / oldScale;
+          const stageCY = viewCenterY / oldScale;
+
+          zoomState.baseScale = computeBaseScale();
+          zoomState.scale = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, zoomState.baseScale));
+          applyStageSize();
+          updateZoomButtons();
+
+          iframeWrapper.scrollLeft = Math.max(0, stageCX * zoomState.scale - iframeWrapper.clientWidth / 2);
+          iframeWrapper.scrollTop = Math.max(0, stageCY * zoomState.scale - iframeWrapper.clientHeight / 2);
         } else if (!nowMobile && newMode === 'desktop') {
           resetForDesktop();
         }
