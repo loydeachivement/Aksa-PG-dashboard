@@ -268,47 +268,43 @@
       color: #ffb3b3;
     }
 
-    /* ----- Zoom toggle button (now in the top bar) ----- */
-    .zoom-toggle-btn {
+    /* ----- Zoom in/out buttons (mobile only, in top bar) ----- */
+    .zoom-btn {
       display: none; /* shown on mobile via media query */
       align-items: center;
-      gap: 0.45rem;
-      padding: 0.45rem 1rem;
-      border-radius: 30px;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
       border: 1px solid #3a4e66;
       background: transparent;
       color: #b8c8dd;
-      font-weight: 500;
-      font-size: 0.85rem;
+      font-size: 0.95rem;
       cursor: pointer;
       transition: all 0.2s;
-      white-space: nowrap;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
+      flex-shrink: 0;
     }
 
-    .zoom-toggle-btn:hover {
+    .zoom-btn:hover {
       background: rgba(63, 126, 240, 0.15);
       border-color: #3f7ef0;
       color: #c2d6ff;
     }
 
-    .zoom-toggle-btn:active {
-      transform: scale(0.97);
+    .zoom-btn:active {
+      transform: scale(0.92);
+      background: rgba(63, 126, 240, 0.35);
     }
 
-    .zoom-toggle-btn.active {
-      background: rgba(63, 126, 240, 0.85);
-      border-color: #6fa4ff;
-      color: #ffffff;
-    }
-
-    .zoom-toggle-btn i {
-      font-size: 0.9rem;
+    .zoom-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
     }
 
     @media (max-width: 768px) {
-      .zoom-toggle-btn {
+      .zoom-btn {
         display: flex;
       }
     }
@@ -352,23 +348,6 @@
       }
     }
 
-    /* ----- Full-screen overlay for zoom/pan mode (mobile) ----- */
-    .zoom-overlay {
-      position: absolute;
-      inset: 0;
-      z-index: 15;
-      display: none;
-      touch-action: none;
-      background: transparent;
-    }
-    .zoom-overlay.active {
-      display: block;
-      cursor: grab;
-    }
-    .zoom-overlay.active:active {
-      cursor: grabbing;
-    }
-
     /* Responsive adjustments for login card */
     @media (max-width: 600px) {
       .card {
@@ -410,12 +389,6 @@
       }
       .logout-btn span {
         display: none;
-      }
-      .zoom-toggle-btn {
-        padding: 0.45rem 0.9rem;
-      }
-      .zoom-toggle-btn span {
-        display: none; /* keep only icon on very small screens */
       }
     }
 
@@ -466,10 +439,13 @@
         <span>Data Dashboard</span>
       </div>
       <div class="topbar-actions">
-        <!-- Zoom toggle button (mobile only, now in the top bar) -->
-        <button class="zoom-toggle-btn" id="zoomToggleBtn" aria-label="Toggle zoom mode">
-          <i class="fas fa-magnifying-glass-plus" id="zoomToggleIcon"></i>
-          <span id="zoomToggleLabel">Zoom</span>
+        <!-- Zoom out -->
+        <button class="zoom-btn" id="zoomOutBtn" aria-label="Zoom out" disabled>
+          <i class="fas fa-minus"></i>
+        </button>
+        <!-- Zoom in -->
+        <button class="zoom-btn" id="zoomInBtn" aria-label="Zoom in">
+          <i class="fas fa-plus"></i>
         </button>
         <div class="user-badge">
           <i class="fas fa-circle-user"></i>
@@ -487,9 +463,6 @@
         <iframe id="sheetIframe"
                 src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTM1w-KU7CTbTDA2iw3jZkQVtK8HNr0kSjMQvITXyUHEEfovbyFBR37_t6h3__C7w/pubhtml?widget=true&amp;headers=false"></iframe>
       </div>
-
-      <!-- Full-screen overlay that captures all touches when Zoom Mode is ON -->
-      <div class="zoom-overlay" id="zoomOverlay"></div>
     </div>
   </div>
 
@@ -516,10 +489,8 @@
       const iframeWrapper = document.getElementById('iframeWrapper');
       const iframeStage = document.getElementById('iframeStage');
       const sheetIframe = document.getElementById('sheetIframe');
-      const zoomOverlay = document.getElementById('zoomOverlay');
-      const zoomToggleBtn = document.getElementById('zoomToggleBtn');
-      const zoomToggleIcon = document.getElementById('zoomToggleIcon');
-      const zoomToggleLabel = document.getElementById('zoomToggleLabel');
+      const zoomInBtn = document.getElementById('zoomInBtn');
+      const zoomOutBtn = document.getElementById('zoomOutBtn');
 
       // ========== PASSWORD TOGGLE ==========
       let passwordVisible = false;
@@ -585,7 +556,6 @@
         usernameInput.focus();
 
         resetForDesktop();
-        setZoomMode(false);
       }
 
       loginBtn.addEventListener('click', performLogin);
@@ -601,7 +571,7 @@
       window.addEventListener('load', () => usernameInput.focus());
 
       // =====================================================
-      // ZOOM & PAN ENGINE
+      // ZOOM ENGINE (simple scale only — no pan, no overlay)
       // =====================================================
       const zoomState = {
         scale: 1,
@@ -629,6 +599,7 @@
         iframeStage.style.transform = 'none';
         sheetIframe.style.width = '';
         sheetIframe.style.height = '';
+        updateZoomButtons();
       }
 
       function computeBaseScale() {
@@ -670,29 +641,34 @@
         clampTranslation();
         iframeStage.style.transform =
           `translate(${zoomState.tx}px, ${zoomState.ty}px) scale(${zoomState.scale})`;
+        updateZoomButtons();
       }
 
-      function setScale(newScale, originX, originY) {
+      function updateZoomButtons() {
+        if (zoomState.mode !== 'mobile') {
+          zoomInBtn.disabled = true;
+          zoomOutBtn.disabled = true;
+          return;
+        }
+        zoomInBtn.disabled = zoomState.scale >= zoomState.maxScale - 0.001;
+        zoomOutBtn.disabled = zoomState.scale <= zoomState.minScale + 0.001;
+      }
+
+      // Zoom by a step, keeping the current viewport center fixed.
+      function zoomBy(factor) {
         if (zoomState.mode !== 'mobile') return;
         const oldScale = zoomState.scale;
-        const clamped = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, newScale));
-        if (clamped === oldScale) return;
+        const clamped = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, oldScale * factor));
+        if (Math.abs(clamped - oldScale) < 0.0001) return;
 
-        if (originX !== undefined && originY !== undefined) {
-          const stageX = (originX - zoomState.tx) / oldScale;
-          const stageY = (originY - zoomState.ty) / oldScale;
-          zoomState.scale = clamped;
-          zoomState.tx = originX - stageX * clamped;
-          zoomState.ty = originY - stageY * clamped;
-        } else {
-          const cx = iframeWrapper.clientWidth / 2;
-          const cy = iframeWrapper.clientHeight / 2;
-          const stageX = (cx - zoomState.tx) / oldScale;
-          const stageY = (cy - zoomState.ty) / oldScale;
-          zoomState.scale = clamped;
-          zoomState.tx = cx - stageX * clamped;
-          zoomState.ty = cy - stageY * clamped;
-        }
+        const cx = iframeWrapper.clientWidth / 2;
+        const cy = iframeWrapper.clientHeight / 2;
+        const stageX = (cx - zoomState.tx) / oldScale;
+        const stageY = (cy - zoomState.ty) / oldScale;
+
+        zoomState.scale = clamped;
+        zoomState.tx = cx - stageX * clamped;
+        zoomState.ty = cy - stageY * clamped;
         applyTransform();
       }
 
@@ -704,143 +680,14 @@
           zoomState.tx = 0;
           zoomState.ty = 0;
           applyTransform();
-          setZoomMode(false);
         } else {
           resetForDesktop();
-          setZoomMode(false);
         }
       }
 
-      // =====================================================
-      // ZOOM MODE TOGGLE (button lives in the top bar)
-      // =====================================================
-      let zoomMode = false;
-
-      function setZoomMode(on) {
-        zoomMode = !!on;
-        if (zoomMode && isMobileViewport()) {
-          zoomOverlay.classList.add('active');
-          zoomToggleBtn.classList.add('active');
-          zoomToggleIcon.className = 'fas fa-hand-pointer';
-          zoomToggleLabel.textContent = 'Pan';
-        } else {
-          zoomOverlay.classList.remove('active');
-          zoomToggleBtn.classList.remove('active');
-          zoomToggleIcon.className = 'fas fa-magnifying-glass-plus';
-          zoomToggleLabel.textContent = 'Zoom';
-        }
-      }
-
-      zoomToggleBtn.addEventListener('click', () => {
-        setZoomMode(!zoomMode);
-      });
-
-      // =====================================================
-      // TOUCH GESTURES ON THE OVERLAY
-      // =====================================================
-      let activePointers = new Map();
-      let lastPan = null;
-      let lastPinchDist = null;
-
-      function getPointerPos(e) {
-        const rect = iframeWrapper.getBoundingClientRect();
-        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      }
-
-      zoomOverlay.addEventListener('pointerdown', (e) => {
-        if (!zoomMode || zoomState.mode !== 'mobile') return;
-        zoomOverlay.setPointerCapture(e.pointerId);
-        activePointers.set(e.pointerId, getPointerPos(e));
-
-        if (activePointers.size === 1) {
-          lastPan = getPointerPos(e);
-        } else if (activePointers.size === 2) {
-          const pts = [...activePointers.values()];
-          lastPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-          lastPan = null;
-        }
-      });
-
-      zoomOverlay.addEventListener('pointermove', (e) => {
-        if (!zoomMode || zoomState.mode !== 'mobile') return;
-        if (!activePointers.has(e.pointerId)) return;
-        const pos = getPointerPos(e);
-        activePointers.set(e.pointerId, pos);
-
-        if (activePointers.size === 1 && lastPan) {
-          zoomState.tx += pos.x - lastPan.x;
-          zoomState.ty += pos.y - lastPan.y;
-          lastPan = pos;
-          applyTransform();
-        } else if (activePointers.size === 2 && lastPinchDist) {
-          const pts = [...activePointers.values()];
-          const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-          const center = {
-            x: (pts[0].x + pts[1].x) / 2,
-            y: (pts[0].y + pts[1].y) / 2
-          };
-          if (lastPinchDist > 0) {
-            const factor = dist / lastPinchDist;
-            setScale(zoomState.scale * factor, center.x, center.y);
-          }
-          lastPinchDist = dist;
-        }
-      });
-
-      function endPointer(e) {
-        activePointers.delete(e.pointerId);
-        if (activePointers.size === 0) {
-          lastPan = null;
-          lastPinchDist = null;
-        } else if (activePointers.size === 1) {
-          lastPan = [...activePointers.values()][0];
-          lastPinchDist = null;
-        }
-      }
-
-      zoomOverlay.addEventListener('pointerup', endPointer);
-      zoomOverlay.addEventListener('pointercancel', endPointer);
-      zoomOverlay.addEventListener('pointerleave', endPointer);
-
-      // Double-tap on overlay to quickly toggle zoom (fit ↔ 2.2x)
-      let lastTap = 0;
-      zoomOverlay.addEventListener('pointerup', (e) => {
-        if (!zoomMode || zoomState.mode !== 'mobile') return;
-        const now = Date.now();
-        if (now - lastTap < 300) {
-          const base = computeBaseScale();
-          const pos = getPointerPos(e);
-          if (zoomState.scale < base * 1.8) {
-            setScale(base * 2.2, pos.x, pos.y);
-          } else {
-            zoomState.scale = base;
-            zoomState.tx = 0;
-            zoomState.ty = 0;
-            applyTransform();
-          }
-        }
-        lastTap = now;
-      });
-
-      // Double-tap on the iframe (interactive mode) enters Zoom Mode
-      let lastIframeTap = 0;
-      iframeWrapper.addEventListener('touchend', (e) => {
-        if (zoomMode) return;
-        if (zoomState.mode !== 'mobile') return;
-        if (e.changedTouches.length !== 1) return;
-        const now = Date.now();
-        if (now - lastIframeTap < 300) {
-          setZoomMode(true);
-          setTimeout(() => {
-            const base = computeBaseScale();
-            const touch = e.changedTouches[0];
-            const rect = iframeWrapper.getBoundingClientRect();
-            const pos = { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
-            setScale(base * 2.2, pos.x, pos.y);
-          }, 10);
-        }
-        lastIframeTap = now;
-      }, { passive: true });
+      // Zoom in / out buttons
+      zoomInBtn.addEventListener('click', () => zoomBy(1.3));
+      zoomOutBtn.addEventListener('click', () => zoomBy(1 / 1.3));
 
       // ---- Mode watcher ----
       let lastMode = isMobileViewport() ? 'mobile' : 'desktop';
@@ -863,7 +710,6 @@
           applyTransform();
         } else if (!nowMobile && newMode === 'desktop') {
           resetForDesktop();
-          setZoomMode(false);
         }
       }
 
