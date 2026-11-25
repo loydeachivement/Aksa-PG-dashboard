@@ -14,18 +14,29 @@
       font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
     }
 
+    /* Allow the page to scroll vertically as a whole document */
     html, body {
-      height: 100%;
+      height: auto;
+      min-height: 100%;
       width: 100%;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     body {
       background: #0b1219;
+      display: block; /* no more centering */
+      transition: background 0.2s ease;
+    }
+
+    /* ----- Login view ----- */
+    .login-view {
+      min-height: 100vh;
+      width: 100%;
       display: flex;
       justify-content: center;
       align-items: center;
-      transition: background 0.2s ease;
+      padding: 1.5rem;
     }
 
     /* ----- Card Base (Login) ----- */
@@ -176,30 +187,30 @@
       gap: 0.5rem;
     }
 
-    /* ----- Dashboard Fullscreen ----- */
+    /* ----- Dashboard (page scrolls as a whole) ----- */
     .dashboard-fullscreen {
       display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+      position: relative;
+      min-height: 100vh;
+      width: 100%;
       background: #0b1219;
-      z-index: 1000;
       flex-direction: column;
-      overflow: hidden;
+      /* NOT overflow hidden — the page body scrolls */
     }
 
+    /* Sticky topbar */
     .dashboard-topbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 0.8rem 1.5rem;
-      background: rgba(10, 18, 28, 0.95);
+      background: rgba(10, 18, 28, 0.98);
       backdrop-filter: blur(8px);
       border-bottom: 1px solid #1f2f42;
-      flex-shrink: 0;
       gap: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
 
     .dashboard-topbar .brand {
@@ -268,7 +279,7 @@
       color: #ffb3b3;
     }
 
-    /* ----- Zoom in/out buttons (mobile only, in top bar) ----- */
+    /* ----- Zoom buttons (in top bar) ----- */
     .zoom-btn {
       display: none;
       align-items: center;
@@ -311,60 +322,52 @@
 
     /* ----- Iframe container ----- */
     .iframe-wrapper {
-      flex: 1;
       width: 100%;
       position: relative;
-      overflow: hidden;
+      overflow-x: auto;
+      overflow-y: hidden; /* we don't need internal vertical scroll — the PAGE scrolls */
       background: #0b1219;
-    }
-
-    /* On mobile, make the wrapper scrollable in BOTH directions */
-    @media (max-width: 768px) {
-      .iframe-wrapper {
-        overflow: auto;
-        -webkit-overflow-scrolling: touch;
-        touch-action: pan-x pan-y;
-      }
+      -webkit-overflow-scrolling: touch;
     }
 
     .iframe-stage {
-      position: absolute;
-      top: 0;
-      left: 0;
+      position: relative;
       width: 100%;
       height: 100%;
-      transform-origin: 0 0;
-      will-change: transform;
-    }
-
-    /* On mobile, the stage is a block element whose explicit size is
-       VIRTUAL_W*scale × VIRTUAL_H*scale. This makes the wrapper scroll
-       in BOTH directions. */
-    @media (max-width: 768px) {
-      .iframe-stage {
-        position: relative;
-        display: block;
-        width: auto;
-        height: auto;
-        overflow: visible;
-      }
     }
 
     .iframe-stage iframe {
-      position: absolute;
-      top: 0;
-      left: 0;
+      display: block;
       width: 100%;
       height: 100%;
       border: 0;
-      display: block;
       background: #fff;
       pointer-events: auto;
     }
 
-    /* Mobile: iframe is a fixed virtual size; the stage size drives scroll.
-       The iframe is scaled with transform to fill the stage. */
+    /* Desktop: iframe fills a tall area of the page */
+    @media (min-width: 769px) {
+      .iframe-wrapper {
+        height: calc(100vh - 64px);
+        min-height: 600px;
+      }
+    }
+
+    /* Mobile: iframe area becomes very tall so the WHOLE PAGE scrolls vertically */
     @media (max-width: 768px) {
+      .iframe-wrapper {
+        height: auto; /* the stage defines the height */
+        overflow-x: auto;
+        overflow-y: hidden; /* page scrolls vertically */
+        touch-action: pan-x pan-y;
+      }
+
+      .iframe-stage {
+        display: block;
+        width: auto;
+        height: auto;
+      }
+
       .iframe-stage iframe {
         position: absolute;
         top: 0;
@@ -373,6 +376,10 @@
         height: 1600px !important;
         transform-origin: 0 0;
         pointer-events: auto;
+      }
+
+      .iframe-stage {
+        position: relative;
       }
     }
 
@@ -429,37 +436,39 @@
 </head>
 <body>
 
-  <!-- LOGIN CARD -->
-  <div id="loginCard" class="card login-card">
-    <h1>Welcome back</h1>
-    <div class="subhead">Sign in to access your dashboard</div>
+  <!-- LOGIN VIEW -->
+  <div id="loginView" class="login-view">
+    <div id="loginCard" class="card login-card">
+      <h1>Welcome back</h1>
+      <div class="subhead">Sign in to access your dashboard</div>
 
-    <div class="input-group">
-      <label for="username">Username</label>
-      <i class="fas fa-user field-icon"></i>
-      <input type="text" id="username" placeholder="Enter username" autocomplete="username">
-    </div>
+      <div class="input-group">
+        <label for="username">Username</label>
+        <i class="fas fa-user field-icon"></i>
+        <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+      </div>
 
-    <div class="input-group password-wrapper">
-      <label for="password">Password</label>
-      <i class="fas fa-lock field-icon"></i>
-      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
-      <button type="button" id="togglePassword" class="toggle-password" aria-label="Toggle password visibility">
-        <i class="fas fa-eye" id="eyeIcon"></i>
+      <div class="input-group password-wrapper">
+        <label for="password">Password</label>
+        <i class="fas fa-lock field-icon"></i>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+        <button type="button" id="togglePassword" class="toggle-password" aria-label="Toggle password visibility">
+          <i class="fas fa-eye" id="eyeIcon"></i>
+        </button>
+      </div>
+
+      <button id="loginBtn" class="btn">
+        <i class="fas fa-arrow-right-to-bracket"></i> Log In
       </button>
-    </div>
 
-    <button id="loginBtn" class="btn">
-      <i class="fas fa-arrow-right-to-bracket"></i> Log In
-    </button>
-
-    <div id="errorMsg" class="error-message">
-      <i class="fas fa-circle-exclamation"></i>
-      <span id="errorText">Invalid credentials. Please try again.</span>
+      <div id="errorMsg" class="error-message">
+        <i class="fas fa-circle-exclamation"></i>
+        <span id="errorText">Invalid credentials. Please try again.</span>
+      </div>
     </div>
   </div>
 
-  <!-- DASHBOARD FULLSCREEN -->
+  <!-- DASHBOARD (page scrolls, topbar sticky) -->
   <div id="dashboardFullscreen" class="dashboard-fullscreen">
     <div class="dashboard-topbar">
       <div class="brand">
@@ -501,6 +510,7 @@
       };
 
       // DOM
+      const loginView = document.getElementById('loginView');
       const loginCard = document.getElementById('loginCard');
       const dashboardFullscreen = document.getElementById('dashboardFullscreen');
       const usernameInput = document.getElementById('username');
@@ -547,7 +557,7 @@
         }
 
         if (VALID_USERS.hasOwnProperty(username) && VALID_USERS[username] === password) {
-          loginCard.style.display = 'none';
+          loginView.style.display = 'none';
           dashboardFullscreen.style.display = 'flex';
           displayUsername.textContent = username;
 
@@ -558,6 +568,9 @@
           usernameInput.value = '';
           passwordInput.value = '';
           clearError();
+
+          // Scroll page to top on login
+          window.scrollTo(0, 0);
 
           setTimeout(initZoom, 100);
         } else {
@@ -570,7 +583,7 @@
       // ========== LOGOUT ==========
       function performLogout() {
         dashboardFullscreen.style.display = 'none';
-        loginCard.style.display = 'block';
+        loginView.style.display = 'flex';
 
         passwordInput.type = 'password';
         passwordVisible = false;
@@ -582,6 +595,7 @@
         usernameInput.focus();
 
         resetForDesktop();
+        window.scrollTo(0, 0);
       }
 
       loginBtn.addEventListener('click', performLogin);
@@ -597,7 +611,9 @@
       window.addEventListener('load', () => usernameInput.focus());
 
       // =====================================================
-      // ZOOM ENGINE (mobile: stage resizes → wrapper scrolls X+Y)
+      // ZOOM ENGINE
+      // Mobile: stage width = 1024*scale (horizontal scroll inside wrapper)
+      //         stage height = 1600*scale (page grows → vertical page scroll)
       // =====================================================
       const zoomState = {
         scale: 1,
@@ -618,10 +634,10 @@
         zoomState.scale = 1;
         zoomState.baseScale = 1;
         zoomState.mode = 'desktop';
-        iframeStage.style.transform = 'none';
         iframeStage.style.width = '';
         iframeStage.style.height = '';
         sheetIframe.style.transform = 'none';
+        iframeWrapper.style.height = '';
         iframeWrapper.scrollLeft = 0;
         iframeWrapper.scrollTop = 0;
         updateZoomButtons();
@@ -632,8 +648,8 @@
         return w / VIRTUAL_W;
       }
 
-      // Mobile: stage gets explicit W×H so the wrapper can scroll BOTH ways.
-      // The iframe is 1024×1600 layout size, scaled visually to fill the stage.
+      // Mobile: set the stage size so the wrapper is wide enough for horizontal scroll,
+      // AND tall enough that the whole PAGE scrolls vertically.
       function applyStageSize() {
         if (zoomState.mode !== 'mobile') return;
         const s = zoomState.scale;
@@ -641,6 +657,8 @@
         iframeStage.style.height = (VIRTUAL_H * s) + 'px';
         sheetIframe.style.transform = `scale(${s})`;
         sheetIframe.style.transformOrigin = '0 0';
+        // The wrapper's height = stage height so page grows with it
+        iframeWrapper.style.height = (VIRTUAL_H * s) + 'px';
       }
 
       function updateZoomButtons() {
@@ -653,30 +671,37 @@
         zoomOutBtn.disabled = zoomState.scale <= zoomState.minScale + 0.001;
       }
 
-      // Zoom around the current scroll center of the wrapper.
+      // Zoom around the current horizontal scroll center.
+      // Vertical center is preserved by the page scroll naturally.
       function zoomBy(factor) {
         if (zoomState.mode !== 'mobile') return;
         const oldScale = zoomState.scale;
         const clamped = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, oldScale * factor));
         if (Math.abs(clamped - oldScale) < 0.0001) return;
 
-        // Scroll position + center of visible area, in current stage coords
+        // Horizontal center of the wrapper (in wrapper coords)
         const viewCenterX = iframeWrapper.scrollLeft + iframeWrapper.clientWidth / 2;
-        const viewCenterY = iframeWrapper.scrollTop + iframeWrapper.clientHeight / 2;
-
-        // Convert to unscaled stage coords (pre-zoom)
         const stageCX = viewCenterX / oldScale;
-        const stageCY = viewCenterY / oldScale;
+
+        // Vertical: track the page scroll position relative to the topbar + wrapper top
+        const wrapperRect = iframeWrapper.getBoundingClientRect();
+        const pageYInWrapper = Math.max(0, -wrapperRect.top + window.scrollY * 0) +
+                               (window.innerHeight / 2 - Math.max(0, wrapperRect.top));
+        // Simpler: use current page scroll within wrapper
+        const currentPageY = window.scrollY - (iframeWrapper.offsetTop || 0);
+        const clampedPageY = Math.max(0, currentPageY + window.innerHeight / 2);
+        const stageCY = clampedPageY / oldScale;
 
         zoomState.scale = clamped;
         applyStageSize();
         updateZoomButtons();
 
-        // After resizing, scroll so the same stage point stays centered
-        const newScrollX = stageCX * clamped - iframeWrapper.clientWidth / 2;
-        const newScrollY = stageCY * clamped - iframeWrapper.clientHeight / 2;
-        iframeWrapper.scrollLeft = Math.max(0, newScrollX);
-        iframeWrapper.scrollTop = Math.max(0, newScrollY);
+        // Restore horizontal position
+        iframeWrapper.scrollLeft = Math.max(0, stageCX * clamped - iframeWrapper.clientWidth / 2);
+
+        // Restore vertical page position
+        const newPageY = stageCY * clamped - window.innerHeight / 2;
+        window.scrollTo(0, Math.max(0, (iframeWrapper.offsetTop || 0) + newPageY));
       }
 
       function initZoom() {
@@ -686,7 +711,6 @@
           zoomState.scale = zoomState.baseScale;
           applyStageSize();
           iframeWrapper.scrollLeft = 0;
-          iframeWrapper.scrollTop = 0;
           updateZoomButtons();
         } else {
           resetForDesktop();
@@ -709,20 +733,10 @@
           lastMode = newMode;
           initZoom();
         } else if (nowMobile && newMode === 'mobile') {
-          // Preserve visible center across resize
-          const oldScale = zoomState.scale;
-          const viewCenterX = iframeWrapper.scrollLeft + iframeWrapper.clientWidth / 2;
-          const viewCenterY = iframeWrapper.scrollTop + iframeWrapper.clientHeight / 2;
-          const stageCX = viewCenterX / oldScale;
-          const stageCY = viewCenterY / oldScale;
-
           zoomState.baseScale = computeBaseScale();
           zoomState.scale = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, zoomState.baseScale));
           applyStageSize();
           updateZoomButtons();
-
-          iframeWrapper.scrollLeft = Math.max(0, stageCX * zoomState.scale - iframeWrapper.clientWidth / 2);
-          iframeWrapper.scrollTop = Math.max(0, stageCY * zoomState.scale - iframeWrapper.clientHeight / 2);
         } else if (!nowMobile && newMode === 'desktop') {
           resetForDesktop();
         }
