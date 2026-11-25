@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>Aksa I&C dashboard view</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* ----- Global Reset & Base ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: #0b1219;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 0.2s ease;
+    }
+
+    /* ----- Card Base (Login) ----- */
+    .card {
+      background: rgba(20, 30, 45, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 2rem;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      width: 100%;
+      max-width: 420px;
+      color: #f0f4fa;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.25s ease;
+    }
+
+    /* ----- Login Card Specific ----- */
+    .login-card h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff, #b0c7e0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .login-card .subhead {
+      font-size: 0.9rem;
+      color: #9eb1c9;
+      margin-bottom: 2rem;
+      border-left: 3px solid #4b8cff;
+      padding-left: 0.75rem;
+    }
+
+    .input-group {
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 0.45rem;
+      color: #b8cbe0;
+      letter-spacing: 0.3px;
+    }
+
+    .input-group i.field-icon {
+      position: absolute;
+      left: 1rem;
+      top: 2.45rem;
+      color: #6e8bb0;
+      font-size: 0.95rem;
+      pointer-events: none;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 0.85rem 1rem 0.85rem 2.8rem;
+      background: #0e1a28;
+      border: 1px solid #253a52;
+      border-radius: 1.2rem;
+      font-size: 0.95rem;
+      color: #fff;
+      outline: none;
+      transition: 0.2s;
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    .input-group input:focus {
+      border-color: #3f7ef0;
+      box-shadow: 0 0 0 3px rgba(63, 126, 240, 0.2), inset 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    .input-group input::placeholder {
+      color: #556b84;
+      font-weight: 300;
+      font-size: 0.85rem;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 1rem;
+      top: 2.45rem;
+      background: transparent;
+      border: none;
+      color: #6e8bb0;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+      z-index: 2;
+    }
+
+    .toggle-password:hover {
+      color: #b0c7e0;
+    }
+
+    .password-wrapper input {
+      padding-right: 3rem;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.85rem;
+      border: none;
+      border-radius: 1.5rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #2f6fdf, #1a4fb0);
+      color: white;
+      box-shadow: 0 8px 18px -6px #0a1d3a;
+      transition: all 0.2s ease;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, #3b7ef0, #245ec9);
+      transform: scale(1.01);
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .error-message {
+      background: rgba(220, 38, 38, 0.15);
+      border-left: 4px solid #b91c1c;
+      color: #fca5a5;
+      padding: 0.7rem 1rem;
+      border-radius: 0.75rem;
+      font-size: 0.85rem;
+      margin: 1rem 0 0.5rem;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ----- Dashboard Fullscreen ----- */
+    .dashboard-fullscreen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #0b1219;
+      z-index: 1000;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .dashboard-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.8rem 1.5rem;
+      background: rgba(10, 18, 28, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #1f2f42;
+      flex-shrink: 0;
+      gap: 1rem;
+    }
+
+    .dashboard-topbar .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      color: #e3ecf5;
+      font-weight: 500;
+      font-size: 1.1rem;
+    }
+
+    .dashboard-topbar .brand i {
+      color: #3f7ef0;
+      font-size: 1.4rem;
+    }
+
+    .user-badge {
+      background: rgba(63, 126, 240, 0.12);
+      padding: 0.45rem 1.1rem;
+      border-radius: 30px;
+      border: 1px solid #2a5ab0;
+      font-weight: 500;
+      color: #c2d6ff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    .user-badge i {
+      font-size: 0.9rem;
+      color: #5f8de0;
+    }
+
+    .user-badge .username-text {
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .logout-btn {
+      background: transparent;
+      border: 1px solid #3a4e66;
+      color: #b8c8dd;
+      padding: 0.45rem 1.1rem;
+      border-radius: 30px;
+      font-weight: 500;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      white-space: nowrap;
+    }
+
+    .logout-btn:hover {
+      background: rgba(220, 38, 38, 0.2);
+      border-color: #b91c1c;
+      color: #ffb3b3;
+    }
+
+    /* ----- Iframe container ----- */
+    .iframe-wrapper {
+      flex: 1;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+      background: #0b1219;
+      touch-action: none; /* we handle all gestures manually */
+    }
+
+    .iframe-stage {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    .iframe-stage iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #fff;
+      /* prevent iframe from stealing touch events — gestures handled by wrapper */
+      pointer-events: none;
+    }
+
+    /* On desktop, allow normal iframe interaction (scroll, click, etc.) */
+    @media (min-width: 769px) {
+      .iframe-stage iframe {
+        pointer-events: auto;
+      }
+    }
+
+    /* ----- Mobile: force desktop layout & scale to fit ----- */
+    @media (max-width: 768px) {
+      .iframe-stage iframe {
+        width: 1024px !important;
+        height: 1600px !important;
+      }
+    }
+
+    /* Responsive adjustments for login card */
+    @media (max-width: 600px) {
+      .card {
+        padding: 2rem 1.5rem;
+        border-radius: 1.8rem;
+        max-width: 92%;
+      }
+      .login-card h1 {
+        font-size: 1.8rem;
+      }
+      .input-group i.field-icon {
+        top: 2.3rem;
+      }
+      .toggle-password {
+        top: 2.3rem;
+      }
+
+      .dashboard-topbar {
+        padding: 0.7rem 1rem;
+      }
+      .dashboard-topbar .brand span {
+        display: none;
+      }
+      .dashboard-topbar .brand i {
+        font-size: 1.6rem;
+      }
+      .user-badge {
+        padding: 0.45rem 0.9rem;
+        font-size: 0.8rem;
+      }
+      .user-badge .username-text {
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .logout-btn {
+        padding: 0.45rem 0.9rem;
+      }
+      .logout-btn span {
+        display: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      input, button {
+        font-size: 16px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOGIN CARD -->
+  <div id="loginCard" class="card login-card">
+    <h1>Welcome back</h1>
+    <div class="subhead">Sign in to access your dashboard</div>
+
+    <div class="input-group">
+      <label for="username">Username</label>
+      <i class="fas fa-user field-icon"></i>
+      <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+    </div>
+
+    <div class="input-group password-wrapper">
+      <label for="password">Password</label>
+      <i class="fas fa-lock field-icon"></i>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+      <button type="button" id="togglePassword" class="toggle-password" aria-label="Toggle password visibility">
+        <i class="fas fa-eye" id="eyeIcon"></i>
+      </button>
+    </div>
+
+    <button id="loginBtn" class="btn">
+      <i class="fas fa-arrow-right-to-bracket"></i> Log In
+    </button>
+
+    <div id="errorMsg" class="error-message">
+      <i class="fas fa-circle-exclamation"></i>
+      <span id="errorText">Invalid credentials. Please try again.</span>
+    </div>
+  </div>
+
+  <!-- DASHBOARD FULLSCREEN -->
+  <div id="dashboardFullscreen" class="dashboard-fullscreen">
+    <div class="dashboard-topbar">
+      <div class="brand">
+        <i class="fas fa-table-columns"></i>
+        <span>Data Dashboard</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div class="user-badge">
+          <i class="fas fa-circle-user"></i>
+          <span class="username-text" id="displayUsername">User</span>
+        </div>
+        <button id="logoutBtn" class="logout-btn">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="iframe-wrapper" id="iframeWrapper">
+      <div class="iframe-stage" id="iframeStage">
+        <iframe id="sheetIframe"
+                src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTM1w-KU7CTbTDA2iw3jZkQVtK8HNr0kSjMQvITXyUHEEfovbyFBR37_t6h3__C7w/pubhtml?widget=true&amp;headers=false"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      // ========== CONFIG ==========
+      const VALID_USERS = {
+        'Tamer': 'aksa2026$',
+        'Loyde': 'aksa2026$'
+      };
+
+      // DOM
+      const loginCard = document.getElementById('loginCard');
+      const dashboardFullscreen = document.getElementById('dashboardFullscreen');
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+      const loginBtn = document.getElementById('loginBtn');
+      const errorMsgDiv = document.getElementById('errorMsg');
+      const errorTextSpan = document.getElementById('errorText');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const displayUsername = document.getElementById('displayUsername');
+      const togglePasswordBtn = document.getElementById('togglePassword');
+      const eyeIcon = document.getElementById('eyeIcon');
+      const iframeWrapper = document.getElementById('iframeWrapper');
+      const iframeStage = document.getElementById('iframeStage');
+      const sheetIframe = document.getElementById('sheetIframe');
+
+      // ========== PASSWORD TOGGLE ==========
+      let passwordVisible = false;
+      togglePasswordBtn.addEventListener('click', () => {
+        passwordVisible = !passwordVisible;
+        passwordInput.type = passwordVisible ? 'text' : 'password';
+        eyeIcon.classList.toggle('fa-eye', !passwordVisible);
+        eyeIcon.classList.toggle('fa-eye-slash', passwordVisible);
+        passwordInput.focus();
+      });
+
+      // ========== HELPERS ==========
+      function showError(message) {
+        errorTextSpan.textContent = message;
+        errorMsgDiv.style.display = 'flex';
+        setTimeout(() => { errorMsgDiv.style.display = 'none'; }, 4000);
+      }
+      function clearError() { errorMsgDiv.style.display = 'none'; }
+
+      // ========== LOGIN ==========
+      function performLogin() {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!username || !password) {
+          showError('Please enter both username and password.');
+          return;
+        }
+
+        if (VALID_USERS.hasOwnProperty(username) && VALID_USERS[username] === password) {
+          loginCard.style.display = 'none';
+          dashboardFullscreen.style.display = 'flex';
+          displayUsername.textContent = username;
+
+          passwordInput.type = 'password';
+          passwordVisible = false;
+          eyeIcon.classList.add('fa-eye');
+          eyeIcon.classList.remove('fa-eye-slash');
+          usernameInput.value = '';
+          passwordInput.value = '';
+          clearError();
+
+          setTimeout(initZoom, 100);
+        } else {
+          showError('Invalid username or password. Please try again.');
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      }
+
+      // ========== LOGOUT ==========
+      function performLogout() {
+        dashboardFullscreen.style.display = 'none';
+        loginCard.style.display = 'block';
+
+        passwordInput.type = 'password';
+        passwordVisible = false;
+        eyeIcon.classList.add('fa-eye');
+        eyeIcon.classList.remove('fa-eye-slash');
+        usernameInput.value = '';
+        passwordInput.value = '';
+        clearError();
+        usernameInput.focus();
+
+        resetForDesktop();
+      }
+
+      loginBtn.addEventListener('click', performLogin);
+      usernameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); passwordInput.focus(); }
+      });
+      passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); performLogin(); }
+      });
+      logoutBtn.addEventListener('click', performLogout);
+      usernameInput.addEventListener('input', clearError);
+      passwordInput.addEventListener('input', clearError);
+      window.addEventListener('load', () => usernameInput.focus());
+
+      // =====================================================
+      // ZOOM & PAN ENGINE — touch-only on mobile
+      // =====================================================
+      const zoomState = {
+        scale: 1,
+        minScale: 0.2,
+        maxScale: 5,
+        tx: 0,
+        ty: 0,
+        baseScale: 1,
+        mode: 'desktop'
+      };
+
+      const VIRTUAL_W = 1024;
+      const VIRTUAL_H = 1600;
+
+      function isMobileViewport() {
+        return window.matchMedia('(max-width: 768px)').matches;
+      }
+
+      function resetForDesktop() {
+        zoomState.scale = 1;
+        zoomState.tx = 0;
+        zoomState.ty = 0;
+        zoomState.baseScale = 1;
+        zoomState.mode = 'desktop';
+        iframeStage.style.transform = 'none';
+        sheetIframe.style.width = '';
+        sheetIframe.style.height = '';
+      }
+
+      function computeBaseScale() {
+        const w = iframeWrapper.clientWidth;
+        return w / VIRTUAL_W;
+      }
+
+      function clampTranslation() {
+        if (zoomState.mode !== 'mobile') return;
+
+        const wrapperW = iframeWrapper.clientWidth;
+        const wrapperH = iframeWrapper.clientHeight;
+        const scaledW = VIRTUAL_W * zoomState.scale;
+        const scaledH = VIRTUAL_H * zoomState.scale;
+
+        if (scaledW >= wrapperW) {
+          const minTx = wrapperW - scaledW;
+          zoomState.tx = Math.min(0, Math.max(minTx, zoomState.tx));
+        } else {
+          const centered = (wrapperW - scaledW) / 2;
+          const slack = (wrapperW - scaledW) / 4;
+          zoomState.tx = Math.min(centered + slack, Math.max(centered - slack, zoomState.tx));
+        }
+
+        if (scaledH >= wrapperH) {
+          const minTy = wrapperH - scaledH;
+          zoomState.ty = Math.min(0, Math.max(minTy, zoomState.ty));
+        } else {
+          const slack = (wrapperH - scaledH) / 4;
+          zoomState.ty = Math.min(slack, Math.max(-slack, zoomState.ty));
+        }
+      }
+
+      function applyTransform() {
+        if (zoomState.mode !== 'mobile') {
+          iframeStage.style.transform = 'none';
+          return;
+        }
+        clampTranslation();
+        iframeStage.style.transform =
+          `translate(${zoomState.tx}px, ${zoomState.ty}px) scale(${zoomState.scale})`;
+      }
+
+      function setScale(newScale, originX, originY) {
+        if (zoomState.mode !== 'mobile') return;
+        const oldScale = zoomState.scale;
+        const clamped = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, newScale));
+        if (clamped === oldScale) return;
+
+        if (originX !== undefined && originY !== undefined) {
+          const stageX = (originX - zoomState.tx) / oldScale;
+          const stageY = (originY - zoomState.ty) / oldScale;
+          zoomState.scale = clamped;
+          zoomState.tx = originX - stageX * clamped;
+          zoomState.ty = originY - stageY * clamped;
+        } else {
+          const cx = iframeWrapper.clientWidth / 2;
+          const cy = iframeWrapper.clientHeight / 2;
+          const stageX = (cx - zoomState.tx) / oldScale;
+          const stageY = (cy - zoomState.ty) / oldScale;
+          zoomState.scale = clamped;
+          zoomState.tx = cx - stageX * clamped;
+          zoomState.ty = cy - stageY * clamped;
+        }
+        applyTransform();
+      }
+
+      function initZoom() {
+        if (isMobileViewport()) {
+          zoomState.mode = 'mobile';
+          zoomState.baseScale = computeBaseScale();
+          zoomState.scale = zoomState.baseScale;
+          zoomState.tx = 0;
+          zoomState.ty = 0;
+          applyTransform();
+        } else {
+          resetForDesktop();
+        }
+      }
+
+      // ---------- Touch Gestures ----------
+      let activePointers = new Map();
+      let lastPan = null;
+      let lastPinchDist = null;
+
+      function getPointerPos(e) {
+        const rect = iframeWrapper.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      iframeWrapper.addEventListener('pointerdown', (e) => {
+        if (zoomState.mode !== 'mobile') return;
+        iframeWrapper.setPointerCapture(e.pointerId);
+        activePointers.set(e.pointerId, getPointerPos(e));
+
+        if (activePointers.size === 1) {
+          lastPan = getPointerPos(e);
+        } else if (activePointers.size === 2) {
+          const pts = [...activePointers.values()];
+          lastPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+          lastPan = null;
+        }
+      });
+
+      iframeWrapper.addEventListener('pointermove', (e) => {
+        if (zoomState.mode !== 'mobile') return;
+        if (!activePointers.has(e.pointerId)) return;
+        const pos = getPointerPos(e);
+        activePointers.set(e.pointerId, pos);
+
+        if (activePointers.size === 1 && lastPan) {
+          zoomState.tx += pos.x - lastPan.x;
+          zoomState.ty += pos.y - lastPan.y;
+          lastPan = pos;
+          applyTransform();
+        } else if (activePointers.size === 2 && lastPinchDist) {
+          const pts = [...activePointers.values()];
+          const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+          const center = {
+            x: (pts[0].x + pts[1].x) / 2,
+            y: (pts[0].y + pts[1].y) / 2
+          };
+          if (lastPinchDist > 0) {
+            const factor = dist / lastPinchDist;
+            setScale(zoomState.scale * factor, center.x, center.y);
+          }
+          lastPinchDist = dist;
+        }
+      });
+
+      function endPointer(e) {
+        activePointers.delete(e.pointerId);
+        if (activePointers.size === 0) {
+          lastPan = null;
+          lastPinchDist = null;
+        } else if (activePointers.size === 1) {
+          lastPan = [...activePointers.values()][0];
+          lastPinchDist = null;
+        }
+      }
+
+      iframeWrapper.addEventListener('pointerup', endPointer);
+      iframeWrapper.addEventListener('pointercancel', endPointer);
+      iframeWrapper.addEventListener('pointerleave', endPointer);
+
+      // Double-tap to toggle zoom
+      let lastTap = 0;
+      iframeWrapper.addEventListener('pointerup', (e) => {
+        if (zoomState.mode !== 'mobile') return;
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          const base = computeBaseScale();
+          const pos = getPointerPos(e);
+          if (zoomState.scale < base * 1.8) {
+            setScale(base * 2.2, pos.x, pos.y);
+          } else {
+            zoomState.scale = base;
+            zoomState.tx = 0;
+            zoomState.ty = 0;
+            applyTransform();
+          }
+        }
+        lastTap = now;
+      });
+
+      // ---- Mode watcher ----
+      let lastMode = isMobileViewport() ? 'mobile' : 'desktop';
+      let resizeTimer;
+
+      function handleViewportChange() {
+        const nowMobile = isMobileViewport();
+        const newMode = nowMobile ? 'mobile' : 'desktop';
+
+        if (newMode !== lastMode) {
+          lastMode = newMode;
+          initZoom();
+        } else if (nowMobile && newMode === 'mobile') {
+          const oldBase = zoomState.baseScale;
+          const newBase = computeBaseScale();
+          if (oldBase > 0) {
+            zoomState.scale = zoomState.scale * (newBase / oldBase);
+          }
+          zoomState.baseScale = newBase;
+          applyTransform();
+        } else if (!nowMobile && newMode === 'desktop') {
+          resetForDesktop();
+        }
+      }
+
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(handleViewportChange, 120);
+      });
+
+      window.addEventListener('orientationchange', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(handleViewportChange, 200);
+      });
+
+      const mq = window.matchMedia('(max-width: 768px)');
+      if (mq.addEventListener) {
+        mq.addEventListener('change', (e) => {
+          lastMode = e.matches ? 'mobile' : 'desktop';
+          initZoom();
+        });
+      } else if (mq.addListener) {
+        mq.addListener((e) => {
+          lastMode = e.matches ? 'mobile' : 'desktop';
+          initZoom();
+        });
+      }
+
+      // Prevent native pinch/scroll on wrapper (mobile only)
+      iframeWrapper.addEventListener('touchmove', (e) => {
+        if (zoomState.mode === 'mobile' && e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+    })();
+  </script>
+</body>
+</html>
