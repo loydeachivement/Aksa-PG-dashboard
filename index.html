@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>Aksa I&C dashboard view</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* ----- Global Reset & Base ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: #0b1219;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 0.2s ease;
+    }
+
+    /* ----- Card Base (Login) ----- */
+    .card {
+      background: rgba(20, 30, 45, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 2rem;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      width: 100%;
+      max-width: 420px;
+      color: #f0f4fa;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.25s ease;
+    }
+
+    /* ----- Login Card Specific ----- */
+    .login-card h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff, #b0c7e0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .login-card .subhead {
+      font-size: 0.9rem;
+      color: #9eb1c9;
+      margin-bottom: 2rem;
+      border-left: 3px solid #4b8cff;
+      padding-left: 0.75rem;
+    }
+
+    .input-group {
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 0.45rem;
+      color: #b8cbe0;
+      letter-spacing: 0.3px;
+    }
+
+    .input-group i.field-icon {
+      position: absolute;
+      left: 1rem;
+      top: 2.45rem;
+      color: #6e8bb0;
+      font-size: 0.95rem;
+      pointer-events: none;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 0.85rem 1rem 0.85rem 2.8rem;
+      background: #0e1a28;
+      border: 1px solid #253a52;
+      border-radius: 1.2rem;
+      font-size: 0.95rem;
+      color: #fff;
+      outline: none;
+      transition: 0.2s;
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    .input-group input:focus {
+      border-color: #3f7ef0;
+      box-shadow: 0 0 0 3px rgba(63, 126, 240, 0.2), inset 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    .input-group input::placeholder {
+      color: #556b84;
+      font-weight: 300;
+      font-size: 0.85rem;
+    }
+
+    /* Password toggle eye icon */
+    .toggle-password {
+      position: absolute;
+      right: 1rem;
+      top: 2.45rem;
+      background: transparent;
+      border: none;
+      color: #6e8bb0;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+      z-index: 2;
+    }
+
+    .toggle-password:hover {
+      color: #b0c7e0;
+    }
+
+    .password-wrapper input {
+      padding-right: 3rem;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.85rem;
+      border: none;
+      border-radius: 1.5rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #2f6fdf, #1a4fb0);
+      color: white;
+      box-shadow: 0 8px 18px -6px #0a1d3a;
+      transition: all 0.2s ease;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, #3b7ef0, #245ec9);
+      transform: scale(1.01);
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .error-message {
+      background: rgba(220, 38, 38, 0.15);
+      border-left: 4px solid #b91c1c;
+      color: #fca5a5;
+      padding: 0.7rem 1rem;
+      border-radius: 0.75rem;
+      font-size: 0.85rem;
+      margin: 1rem 0 0.5rem;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ----- Dashboard Fullscreen ----- */
+    .dashboard-fullscreen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #0b1219;
+      z-index: 1000;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .dashboard-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.8rem 1.5rem;
+      background: rgba(10, 18, 28, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #1f2f42;
+      flex-shrink: 0;
+      gap: 1rem;
+    }
+
+    .dashboard-topbar .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      color: #e3ecf5;
+      font-weight: 500;
+      font-size: 1.1rem;
+    }
+
+    .dashboard-topbar .brand i {
+      color: #3f7ef0;
+      font-size: 1.4rem;
+    }
+
+    .user-badge {
+      background: rgba(63, 126, 240, 0.12);
+      padding: 0.45rem 1.1rem;
+      border-radius: 30px;
+      border: 1px solid #2a5ab0;
+      font-weight: 500;
+      color: #c2d6ff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    .user-badge i {
+      font-size: 0.9rem;
+      color: #5f8de0;
+    }
+
+    .user-badge .username-text {
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .logout-btn {
+      background: transparent;
+      border: 1px solid #3a4e66;
+      color: #b8c8dd;
+      padding: 0.45rem 1.1rem;
+      border-radius: 30px;
+      font-weight: 500;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      white-space: nowrap;
+    }
+
+    .logout-btn:hover {
+      background: rgba(220, 38, 38, 0.2);
+      border-color: #b91c1c;
+      color: #ffb3b3;
+    }
+
+    /* Iframe container — normal, natural Google embed */
+    .iframe-wrapper {
+      flex: 1;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+      background: #0b1219;
+    }
+
+    .iframe-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    /* Responsive adjustments for mobile */
+    @media (max-width: 600px) {
+      .card {
+        padding: 2rem 1.5rem;
+        border-radius: 1.8rem;
+        max-width: 92%;
+      }
+      .login-card h1 {
+        font-size: 1.8rem;
+      }
+      .input-group i.field-icon {
+        top: 2.3rem;
+      }
+      .toggle-password {
+        top: 2.3rem;
+      }
+
+      .dashboard-topbar {
+        padding: 0.7rem 1rem;
+      }
+      .dashboard-topbar .brand span {
+        display: none;
+      }
+      .dashboard-topbar .brand i {
+        font-size: 1.6rem;
+      }
+      .user-badge {
+        padding: 0.45rem 0.9rem;
+        font-size: 0.8rem;
+      }
+      .user-badge .username-text {
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .logout-btn {
+        padding: 0.45rem 0.9rem;
+      }
+      .logout-btn span {
+        display: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      input, button {
+        font-size: 16px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOGIN CARD (visible by default) -->
+  <div id="loginCard" class="card login-card">
+    <h1>Welcome back</h1>
+    <div class="subhead">Sign in to access your dashboard</div>
+
+    <div class="input-group">
+      <label for="username">Username</label>
+      <i class="fas fa-user field-icon"></i>
+      <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+    </div>
+
+    <div class="input-group password-wrapper">
+      <label for="password">Password</label>
+      <i class="fas fa-lock field-icon"></i>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+      <button type="button" id="togglePassword" class="toggle-password" aria-label="Toggle password visibility">
+        <i class="fas fa-eye" id="eyeIcon"></i>
+      </button>
+    </div>
+
+    <button id="loginBtn" class="btn">
+      <i class="fas fa-arrow-right-to-bracket"></i> Log In
+    </button>
+
+    <div id="errorMsg" class="error-message">
+      <i class="fas fa-circle-exclamation"></i>
+      <span id="errorText">Invalid credentials. Please try again.</span>
+    </div>
+  </div>
+
+  <!-- DASHBOARD FULLSCREEN (hidden initially) -->
+  <div id="dashboardFullscreen" class="dashboard-fullscreen">
+    <div class="dashboard-topbar">
+      <div class="brand">
+        <i class="fas fa-table-columns"></i>
+        <span>Aksa I&C dashboard view</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div class="user-badge">
+          <i class="fas fa-circle-user"></i>
+          <span class="username-text" id="displayUsername">User</span>
+        </div>
+        <button id="logoutBtn" class="logout-btn">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Iframe area fills the rest of the screen — normal Google embed -->
+    <div class="iframe-wrapper">
+      <iframe src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTM1w-KU7CTbTDA2iw3jZkQVtK8HNr0kSjMQvITXyUHEEfovbyFBR37_t6h3__C7w/pubhtml?widget=true&amp;headers=false"></iframe>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      // ========== CONFIGURATION ==========
+      const VALID_USERS = {
+        'Tamer': 'aksa2026$',
+        'Loyde': 'aksa2026$'
+      };
+
+      // DOM elements
+      const loginCard = document.getElementById('loginCard');
+      const dashboardFullscreen = document.getElementById('dashboardFullscreen');
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+      const loginBtn = document.getElementById('loginBtn');
+      const errorMsgDiv = document.getElementById('errorMsg');
+      const errorTextSpan = document.getElementById('errorText');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const displayUsername = document.getElementById('displayUsername');
+      const togglePasswordBtn = document.getElementById('togglePassword');
+      const eyeIcon = document.getElementById('eyeIcon');
+
+      // ========== PASSWORD TOGGLE ==========
+      let passwordVisible = false;
+
+      togglePasswordBtn.addEventListener('click', () => {
+        passwordVisible = !passwordVisible;
+        passwordInput.type = passwordVisible ? 'text' : 'password';
+        eyeIcon.classList.toggle('fa-eye', !passwordVisible);
+        eyeIcon.classList.toggle('fa-eye-slash', passwordVisible);
+        passwordInput.focus();
+      });
+
+      // ========== HELPERS ==========
+      function showError(message) {
+        errorTextSpan.textContent = message;
+        errorMsgDiv.style.display = 'flex';
+        setTimeout(() => {
+          errorMsgDiv.style.display = 'none';
+        }, 4000);
+      }
+
+      function clearError() {
+        errorMsgDiv.style.display = 'none';
+      }
+
+      // ========== LOGIN ==========
+      function performLogin() {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!username || !password) {
+          showError('Please enter both username and password.');
+          return;
+        }
+
+        if (VALID_USERS.hasOwnProperty(username) && VALID_USERS[username] === password) {
+          loginCard.style.display = 'none';
+          dashboardFullscreen.style.display = 'flex';
+          displayUsername.textContent = username;
+
+          passwordInput.type = 'password';
+          passwordVisible = false;
+          eyeIcon.classList.add('fa-eye');
+          eyeIcon.classList.remove('fa-eye-slash');
+
+          usernameInput.value = '';
+          passwordInput.value = '';
+          clearError();
+        } else {
+          showError('Invalid username or password. Please try again.');
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      }
+
+      // ========== LOGOUT ==========
+      function performLogout() {
+        dashboardFullscreen.style.display = 'none';
+        loginCard.style.display = 'block';
+
+        passwordInput.type = 'password';
+        passwordVisible = false;
+        eyeIcon.classList.add('fa-eye');
+        eyeIcon.classList.remove('fa-eye-slash');
+
+        usernameInput.value = '';
+        passwordInput.value = '';
+        clearError();
+        usernameInput.focus();
+      }
+
+      // ========== EVENT LISTENERS ==========
+      loginBtn.addEventListener('click', performLogin);
+
+      usernameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          passwordInput.focus();
+        }
+      });
+
+      passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          performLogin();
+        }
+      });
+
+      logoutBtn.addEventListener('click', performLogout);
+
+      usernameInput.addEventListener('input', clearError);
+      passwordInput.addEventListener('input', clearError);
+
+      window.addEventListener('load', () => {
+        usernameInput.focus();
+      });
+    })();
+  </script>
+</body>
+</html>
