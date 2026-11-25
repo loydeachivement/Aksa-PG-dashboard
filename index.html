@@ -110,7 +110,6 @@
       font-size: 0.85rem;
     }
 
-    /* Password toggle eye icon */
     .toggle-password {
       position: absolute;
       right: 1rem;
@@ -264,17 +263,27 @@
       color: #ffb3b3;
     }
 
-    /* ----- Iframe container — natural Google embed ----- */
+    /* ----- Iframe container ----- */
     .iframe-wrapper {
       flex: 1;
       width: 100%;
       position: relative;
-      overflow: auto; /* allow scroll when scaled content overflows */
+      overflow: hidden;
       background: #0b1219;
-      -webkit-overflow-scrolling: touch;
+      touch-action: none;
     }
 
-    .iframe-wrapper iframe {
+    .iframe-stage {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    .iframe-stage iframe {
       position: absolute;
       top: 0;
       left: 0;
@@ -282,33 +291,60 @@
       height: 100%;
       border: 0;
       display: block;
+      background: #fff;
     }
 
-    /* ----- Mobile: scale the iframe down so the whole sheet fits ----- */
+    /* ----- Mobile: force desktop layout & scale to fit ----- */
     @media (max-width: 768px) {
-      .iframe-wrapper {
-        overflow: hidden; /* hide overflow because we scale to fit */
-      }
-
-      .iframe-wrapper iframe {
-        /* Force a wider "virtual" viewport so Google Sheets renders its desktop layout,
-           then scale it down to fit the actual screen width. */
-        width: 1024px !important;
-        height: 1400px !important;
-        transform: scale(0.38);      /* ~390px / 1024px */
-        transform-origin: top left;
-        position: absolute;
-        top: 0;
-        left: 0;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .iframe-wrapper iframe {
+      .iframe-stage iframe {
         width: 1024px !important;
         height: 1600px !important;
-        transform: scale(0.34);
-        transform-origin: top left;
+      }
+    }
+
+    /* ----- Zoom controls (mobile) ----- */
+    .zoom-controls {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      display: none;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 20;
+    }
+
+    .zoom-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(20, 32, 48, 0.9);
+      border: 1px solid #3a5470;
+      color: #d8e6ff;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+      transition: background 0.2s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .zoom-btn:active {
+      background: rgba(63, 126, 240, 0.5);
+      transform: scale(0.94);
+    }
+
+    .zoom-btn.reset {
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .zoom-controls {
+        display: flex;
       }
     }
 
@@ -365,7 +401,7 @@
 </head>
 <body>
 
-  <!-- LOGIN CARD (visible by default) -->
+  <!-- LOGIN CARD -->
   <div id="loginCard" class="card login-card">
     <h1>Welcome back</h1>
     <div class="subhead">Sign in to access your dashboard</div>
@@ -395,7 +431,7 @@
     </div>
   </div>
 
-  <!-- DASHBOARD FULLSCREEN (hidden initially) -->
+  <!-- DASHBOARD FULLSCREEN -->
   <div id="dashboardFullscreen" class="dashboard-fullscreen">
     <div class="dashboard-topbar">
       <div class="brand">
@@ -414,21 +450,33 @@
       </div>
     </div>
 
-    <!-- Iframe area fills the rest of the screen -->
-    <div class="iframe-wrapper">
-      <iframe src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTM1w-KU7CTbTDA2iw3jZkQVtK8HNr0kSjMQvITXyUHEEfovbyFBR37_t6h3__C7w/pubhtml?widget=true&amp;headers=false"></iframe>
+    <div class="iframe-wrapper" id="iframeWrapper">
+      <div class="iframe-stage" id="iframeStage">
+        <iframe id="sheetIframe"
+                src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTM1w-KU7CTbTDA2iw3jZkQVtK8HNr0kSjMQvITXyUHEEfovbyFBR37_t6h3__C7w/pubhtml?widget=true&amp;headers=false"></iframe>
+      </div>
+
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomInBtn" aria-label="Zoom in">
+          <i class="fas fa-plus"></i>
+        </button>
+        <button class="zoom-btn" id="zoomOutBtn" aria-label="Zoom out">
+          <i class="fas fa-minus"></i>
+        </button>
+        <button class="zoom-btn reset" id="zoomResetBtn" aria-label="Reset zoom">1:1</button>
+      </div>
     </div>
   </div>
 
   <script>
     (function() {
-      // ========== CONFIGURATION ==========
+      // ========== CONFIG ==========
       const VALID_USERS = {
         'Tamer': 'aksa2026$',
         'Loyde': 'aksa2026$'
       };
 
-      // DOM elements
+      // DOM
       const loginCard = document.getElementById('loginCard');
       const dashboardFullscreen = document.getElementById('dashboardFullscreen');
       const usernameInput = document.getElementById('username');
@@ -440,10 +488,15 @@
       const displayUsername = document.getElementById('displayUsername');
       const togglePasswordBtn = document.getElementById('togglePassword');
       const eyeIcon = document.getElementById('eyeIcon');
+      const iframeWrapper = document.getElementById('iframeWrapper');
+      const iframeStage = document.getElementById('iframeStage');
+      const sheetIframe = document.getElementById('sheetIframe');
+      const zoomInBtn = document.getElementById('zoomInBtn');
+      const zoomOutBtn = document.getElementById('zoomOutBtn');
+      const zoomResetBtn = document.getElementById('zoomResetBtn');
 
       // ========== PASSWORD TOGGLE ==========
       let passwordVisible = false;
-
       togglePasswordBtn.addEventListener('click', () => {
         passwordVisible = !passwordVisible;
         passwordInput.type = passwordVisible ? 'text' : 'password';
@@ -456,14 +509,9 @@
       function showError(message) {
         errorTextSpan.textContent = message;
         errorMsgDiv.style.display = 'flex';
-        setTimeout(() => {
-          errorMsgDiv.style.display = 'none';
-        }, 4000);
+        setTimeout(() => { errorMsgDiv.style.display = 'none'; }, 4000);
       }
-
-      function clearError() {
-        errorMsgDiv.style.display = 'none';
-      }
+      function clearError() { errorMsgDiv.style.display = 'none'; }
 
       // ========== LOGIN ==========
       function performLogin() {
@@ -484,10 +532,11 @@
           passwordVisible = false;
           eyeIcon.classList.add('fa-eye');
           eyeIcon.classList.remove('fa-eye-slash');
-
           usernameInput.value = '';
           passwordInput.value = '';
           clearError();
+
+          setTimeout(initZoom, 100);
         } else {
           showError('Invalid username or password. Please try again.');
           passwordInput.value = '';
@@ -504,38 +553,301 @@
         passwordVisible = false;
         eyeIcon.classList.add('fa-eye');
         eyeIcon.classList.remove('fa-eye-slash');
-
         usernameInput.value = '';
         passwordInput.value = '';
         clearError();
         usernameInput.focus();
+
+        resetForDesktop();
       }
 
-      // ========== EVENT LISTENERS ==========
       loginBtn.addEventListener('click', performLogin);
-
       usernameInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          passwordInput.focus();
-        }
+        if (e.key === 'Enter') { e.preventDefault(); passwordInput.focus(); }
       });
-
       passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          performLogin();
-        }
+        if (e.key === 'Enter') { e.preventDefault(); performLogin(); }
       });
-
       logoutBtn.addEventListener('click', performLogout);
-
       usernameInput.addEventListener('input', clearError);
       passwordInput.addEventListener('input', clearError);
+      window.addEventListener('load', () => usernameInput.focus());
 
-      window.addEventListener('load', () => {
-        usernameInput.focus();
+      // =====================================================
+      // ZOOM & PAN ENGINE
+      // =====================================================
+      const zoomState = {
+        scale: 1,
+        minScale: 0.2,
+        maxScale: 5,
+        tx: 0,
+        ty: 0,
+        baseScale: 1,
+        mode: 'desktop' // 'desktop' | 'mobile'
+      };
+
+      const VIRTUAL_W = 1024;
+      const VIRTUAL_H = 1600;
+
+      function isMobileViewport() {
+        return window.matchMedia('(max-width: 768px)').matches;
+      }
+
+      // Clear any transform and restore the iframe to fill the wrapper (desktop mode)
+      function resetForDesktop() {
+        zoomState.scale = 1;
+        zoomState.tx = 0;
+        zoomState.ty = 0;
+        zoomState.baseScale = 1;
+        zoomState.mode = 'desktop';
+        // Remove inline styles that were applied by the zoom engine
+        iframeStage.style.transform = 'none';
+        sheetIframe.style.width = '';
+        sheetIframe.style.height = '';
+        sheetIframe.style.position = '';
+        sheetIframe.style.top = '';
+        sheetIframe.style.left = '';
+      }
+
+      // Fit-to-width scale for mobile
+      function computeBaseScale() {
+        const w = iframeWrapper.clientWidth;
+        return w / VIRTUAL_W;
+      }
+
+      function clampTranslation() {
+        if (zoomState.mode !== 'mobile') return;
+
+        const wrapperW = iframeWrapper.clientWidth;
+        const wrapperH = iframeWrapper.clientHeight;
+        const scaledW = VIRTUAL_W * zoomState.scale;
+        const scaledH = VIRTUAL_H * zoomState.scale;
+
+        // Horizontal
+        if (scaledW >= wrapperW) {
+          const minTx = wrapperW - scaledW;
+          zoomState.tx = Math.min(0, Math.max(minTx, zoomState.tx));
+        } else {
+          const centered = (wrapperW - scaledW) / 2;
+          const slack = (wrapperW - scaledW) / 4;
+          zoomState.tx = Math.min(centered + slack, Math.max(centered - slack, zoomState.tx));
+        }
+
+        // Vertical
+        if (scaledH >= wrapperH) {
+          const minTy = wrapperH - scaledH;
+          zoomState.ty = Math.min(0, Math.max(minTy, zoomState.ty));
+        } else {
+          const slack = (wrapperH - scaledH) / 4;
+          zoomState.ty = Math.min(slack, Math.max(-slack, zoomState.ty));
+        }
+      }
+
+      function applyTransform() {
+        if (zoomState.mode !== 'mobile') {
+          // Desktop: no transform at all
+          iframeStage.style.transform = 'none';
+          return;
+        }
+        clampTranslation();
+        iframeStage.style.transform =
+          `translate(${zoomState.tx}px, ${zoomState.ty}px) scale(${zoomState.scale})`;
+      }
+
+      function setScale(newScale, originX, originY) {
+        if (zoomState.mode !== 'mobile') return;
+        const oldScale = zoomState.scale;
+        const clamped = Math.min(zoomState.maxScale, Math.max(zoomState.minScale, newScale));
+        if (clamped === oldScale) return;
+
+        if (originX !== undefined && originY !== undefined) {
+          const stageX = (originX - zoomState.tx) / oldScale;
+          const stageY = (originY - zoomState.ty) / oldScale;
+          zoomState.scale = clamped;
+          zoomState.tx = originX - stageX * clamped;
+          zoomState.ty = originY - stageY * clamped;
+        } else {
+          const cx = iframeWrapper.clientWidth / 2;
+          const cy = iframeWrapper.clientHeight / 2;
+          const stageX = (cx - zoomState.tx) / oldScale;
+          const stageY = (cy - zoomState.ty) / oldScale;
+          zoomState.scale = clamped;
+          zoomState.tx = cx - stageX * clamped;
+          zoomState.ty = cy - stageY * clamped;
+        }
+        applyTransform();
+      }
+
+      function initZoom() {
+        if (isMobileViewport()) {
+          zoomState.mode = 'mobile';
+          zoomState.baseScale = computeBaseScale();
+          zoomState.scale = zoomState.baseScale;
+          zoomState.tx = 0;
+          zoomState.ty = 0;
+          applyTransform();
+        } else {
+          resetForDesktop();
+        }
+      }
+
+      // Button zoom (only works in mobile mode)
+      zoomInBtn.addEventListener('click', () => setScale(zoomState.scale * 1.3));
+      zoomOutBtn.addEventListener('click', () => setScale(zoomState.scale / 1.3));
+      zoomResetBtn.addEventListener('click', () => {
+        if (zoomState.mode !== 'mobile') return;
+        zoomState.scale = computeBaseScale();
+        zoomState.tx = 0;
+        zoomState.ty = 0;
+        applyTransform();
       });
+
+      // ---------- Touch / Pointer Gestures ----------
+      let activePointers = new Map();
+      let lastPan = null;
+      let lastPinchDist = null;
+
+      function getPointerPos(e) {
+        const rect = iframeWrapper.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      iframeWrapper.addEventListener('pointerdown', (e) => {
+        if (zoomState.mode !== 'mobile') return;
+        if (e.target.closest('.zoom-controls')) return;
+        iframeWrapper.setPointerCapture(e.pointerId);
+        activePointers.set(e.pointerId, getPointerPos(e));
+
+        if (activePointers.size === 1) {
+          lastPan = getPointerPos(e);
+        } else if (activePointers.size === 2) {
+          const pts = [...activePointers.values()];
+          lastPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+          lastPan = null;
+        }
+      });
+
+      iframeWrapper.addEventListener('pointermove', (e) => {
+        if (zoomState.mode !== 'mobile') return;
+        if (!activePointers.has(e.pointerId)) return;
+        const pos = getPointerPos(e);
+        activePointers.set(e.pointerId, pos);
+
+        if (activePointers.size === 1 && lastPan) {
+          zoomState.tx += pos.x - lastPan.x;
+          zoomState.ty += pos.y - lastPan.y;
+          lastPan = pos;
+          applyTransform();
+        } else if (activePointers.size === 2 && lastPinchDist) {
+          const pts = [...activePointers.values()];
+          const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+          const center = {
+            x: (pts[0].x + pts[1].x) / 2,
+            y: (pts[0].y + pts[1].y) / 2
+          };
+          if (lastPinchDist > 0) {
+            const factor = dist / lastPinchDist;
+            setScale(zoomState.scale * factor, center.x, center.y);
+          }
+          lastPinchDist = dist;
+        }
+      });
+
+      function endPointer(e) {
+        activePointers.delete(e.pointerId);
+        if (activePointers.size === 0) {
+          lastPan = null;
+          lastPinchDist = null;
+        } else if (activePointers.size === 1) {
+          lastPan = [...activePointers.values()][0];
+          lastPinchDist = null;
+        }
+      }
+
+      iframeWrapper.addEventListener('pointerup', endPointer);
+      iframeWrapper.addEventListener('pointercancel', endPointer);
+      iframeWrapper.addEventListener('pointerleave', endPointer);
+
+      // Double-tap to toggle zoom (mobile only)
+      let lastTap = 0;
+      iframeWrapper.addEventListener('pointerup', (e) => {
+        if (zoomState.mode !== 'mobile') return;
+        if (e.target.closest('.zoom-controls')) return;
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          const base = computeBaseScale();
+          const pos = getPointerPos(e);
+          if (zoomState.scale < base * 1.8) {
+            setScale(base * 2.2, pos.x, pos.y);
+          } else {
+            zoomState.scale = base;
+            zoomState.tx = 0;
+            zoomState.ty = 0;
+            applyTransform();
+          }
+        }
+        lastTap = now;
+      });
+
+      // ---- Mode watcher: handle resize & orientation change ----
+      let lastMode = isMobileViewport() ? 'mobile' : 'desktop';
+      let resizeTimer;
+
+      function handleViewportChange() {
+        const nowMobile = isMobileViewport();
+        const newMode = nowMobile ? 'mobile' : 'desktop';
+
+        if (newMode !== lastMode) {
+          // Mode actually changed — full reinit
+          lastMode = newMode;
+          initZoom();
+        } else if (nowMobile && newMode === 'mobile') {
+          // Still mobile: keep relative zoom but recompute base scale
+          const oldBase = zoomState.baseScale;
+          const newBase = computeBaseScale();
+          if (oldBase > 0) {
+            zoomState.scale = zoomState.scale * (newBase / oldBase);
+          }
+          zoomState.baseScale = newBase;
+          applyTransform();
+        } else if (!nowMobile && newMode === 'desktop') {
+          // Still desktop — nothing to do
+          resetForDesktop();
+        }
+      }
+
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(handleViewportChange, 120);
+      });
+
+      window.addEventListener('orientationchange', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(handleViewportChange, 200);
+      });
+
+      // Also listen for media-query change (more reliable than resize in some browsers)
+      const mq = window.matchMedia('(max-width: 768px)');
+      if (mq.addEventListener) {
+        mq.addEventListener('change', (e) => {
+          lastMode = e.matches ? 'mobile' : 'desktop';
+          initZoom();
+        });
+      } else if (mq.addListener) {
+        // Safari < 14
+        mq.addListener((e) => {
+          lastMode = e.matches ? 'mobile' : 'desktop';
+          initZoom();
+        });
+      }
+
+      // Prevent native browser pinch/scroll on wrapper (mobile only)
+      iframeWrapper.addEventListener('touchmove', (e) => {
+        if (zoomState.mode === 'mobile' && e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
     })();
   </script>
 </body>
