@@ -270,7 +270,7 @@
       position: relative;
       overflow: hidden;
       background: #0b1219;
-      touch-action: none;
+      touch-action: none; /* we handle all gestures manually */
     }
 
     .iframe-stage {
@@ -292,6 +292,15 @@
       border: 0;
       display: block;
       background: #fff;
+      /* prevent iframe from stealing touch events — gestures handled by wrapper */
+      pointer-events: none;
+    }
+
+    /* On desktop, allow normal iframe interaction (scroll, click, etc.) */
+    @media (min-width: 769px) {
+      .iframe-stage iframe {
+        pointer-events: auto;
+      }
     }
 
     /* ----- Mobile: force desktop layout & scale to fit ----- */
@@ -299,52 +308,6 @@
       .iframe-stage iframe {
         width: 1024px !important;
         height: 1600px !important;
-      }
-    }
-
-    /* ----- Zoom controls (mobile) ----- */
-    .zoom-controls {
-      position: absolute;
-      bottom: 1rem;
-      right: 1rem;
-      display: none;
-      flex-direction: column;
-      gap: 0.5rem;
-      z-index: 20;
-    }
-
-    .zoom-btn {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: rgba(20, 32, 48, 0.9);
-      border: 1px solid #3a5470;
-      color: #d8e6ff;
-      font-size: 1.1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
-      transition: background 0.2s, transform 0.1s;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-    }
-
-    .zoom-btn:active {
-      background: rgba(63, 126, 240, 0.5);
-      transform: scale(0.94);
-    }
-
-    .zoom-btn.reset {
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    @media (max-width: 768px) {
-      .zoom-controls {
-        display: flex;
       }
     }
 
@@ -455,16 +418,6 @@
         <iframe id="sheetIframe"
                 src="https://docs.google.com/spreadsheets/d/e/2PACX-1vTM1w-KU7CTbTDA2iw3jZkQVtK8HNr0kSjMQvITXyUHEEfovbyFBR37_t6h3__C7w/pubhtml?widget=true&amp;headers=false"></iframe>
       </div>
-
-      <div class="zoom-controls">
-        <button class="zoom-btn" id="zoomInBtn" aria-label="Zoom in">
-          <i class="fas fa-plus"></i>
-        </button>
-        <button class="zoom-btn" id="zoomOutBtn" aria-label="Zoom out">
-          <i class="fas fa-minus"></i>
-        </button>
-        <button class="zoom-btn reset" id="zoomResetBtn" aria-label="Reset zoom">1:1</button>
-      </div>
     </div>
   </div>
 
@@ -491,9 +444,6 @@
       const iframeWrapper = document.getElementById('iframeWrapper');
       const iframeStage = document.getElementById('iframeStage');
       const sheetIframe = document.getElementById('sheetIframe');
-      const zoomInBtn = document.getElementById('zoomInBtn');
-      const zoomOutBtn = document.getElementById('zoomOutBtn');
-      const zoomResetBtn = document.getElementById('zoomResetBtn');
 
       // ========== PASSWORD TOGGLE ==========
       let passwordVisible = false;
@@ -574,7 +524,7 @@
       window.addEventListener('load', () => usernameInput.focus());
 
       // =====================================================
-      // ZOOM & PAN ENGINE
+      // ZOOM & PAN ENGINE — touch-only on mobile
       // =====================================================
       const zoomState = {
         scale: 1,
@@ -583,7 +533,7 @@
         tx: 0,
         ty: 0,
         baseScale: 1,
-        mode: 'desktop' // 'desktop' | 'mobile'
+        mode: 'desktop'
       };
 
       const VIRTUAL_W = 1024;
@@ -593,23 +543,17 @@
         return window.matchMedia('(max-width: 768px)').matches;
       }
 
-      // Clear any transform and restore the iframe to fill the wrapper (desktop mode)
       function resetForDesktop() {
         zoomState.scale = 1;
         zoomState.tx = 0;
         zoomState.ty = 0;
         zoomState.baseScale = 1;
         zoomState.mode = 'desktop';
-        // Remove inline styles that were applied by the zoom engine
         iframeStage.style.transform = 'none';
         sheetIframe.style.width = '';
         sheetIframe.style.height = '';
-        sheetIframe.style.position = '';
-        sheetIframe.style.top = '';
-        sheetIframe.style.left = '';
       }
 
-      // Fit-to-width scale for mobile
       function computeBaseScale() {
         const w = iframeWrapper.clientWidth;
         return w / VIRTUAL_W;
@@ -623,7 +567,6 @@
         const scaledW = VIRTUAL_W * zoomState.scale;
         const scaledH = VIRTUAL_H * zoomState.scale;
 
-        // Horizontal
         if (scaledW >= wrapperW) {
           const minTx = wrapperW - scaledW;
           zoomState.tx = Math.min(0, Math.max(minTx, zoomState.tx));
@@ -633,7 +576,6 @@
           zoomState.tx = Math.min(centered + slack, Math.max(centered - slack, zoomState.tx));
         }
 
-        // Vertical
         if (scaledH >= wrapperH) {
           const minTy = wrapperH - scaledH;
           zoomState.ty = Math.min(0, Math.max(minTy, zoomState.ty));
@@ -645,7 +587,6 @@
 
       function applyTransform() {
         if (zoomState.mode !== 'mobile') {
-          // Desktop: no transform at all
           iframeStage.style.transform = 'none';
           return;
         }
@@ -691,18 +632,7 @@
         }
       }
 
-      // Button zoom (only works in mobile mode)
-      zoomInBtn.addEventListener('click', () => setScale(zoomState.scale * 1.3));
-      zoomOutBtn.addEventListener('click', () => setScale(zoomState.scale / 1.3));
-      zoomResetBtn.addEventListener('click', () => {
-        if (zoomState.mode !== 'mobile') return;
-        zoomState.scale = computeBaseScale();
-        zoomState.tx = 0;
-        zoomState.ty = 0;
-        applyTransform();
-      });
-
-      // ---------- Touch / Pointer Gestures ----------
+      // ---------- Touch Gestures ----------
       let activePointers = new Map();
       let lastPan = null;
       let lastPinchDist = null;
@@ -714,7 +644,6 @@
 
       iframeWrapper.addEventListener('pointerdown', (e) => {
         if (zoomState.mode !== 'mobile') return;
-        if (e.target.closest('.zoom-controls')) return;
         iframeWrapper.setPointerCapture(e.pointerId);
         activePointers.set(e.pointerId, getPointerPos(e));
 
@@ -768,11 +697,10 @@
       iframeWrapper.addEventListener('pointercancel', endPointer);
       iframeWrapper.addEventListener('pointerleave', endPointer);
 
-      // Double-tap to toggle zoom (mobile only)
+      // Double-tap to toggle zoom
       let lastTap = 0;
       iframeWrapper.addEventListener('pointerup', (e) => {
         if (zoomState.mode !== 'mobile') return;
-        if (e.target.closest('.zoom-controls')) return;
         const now = Date.now();
         if (now - lastTap < 300) {
           const base = computeBaseScale();
@@ -789,7 +717,7 @@
         lastTap = now;
       });
 
-      // ---- Mode watcher: handle resize & orientation change ----
+      // ---- Mode watcher ----
       let lastMode = isMobileViewport() ? 'mobile' : 'desktop';
       let resizeTimer;
 
@@ -798,11 +726,9 @@
         const newMode = nowMobile ? 'mobile' : 'desktop';
 
         if (newMode !== lastMode) {
-          // Mode actually changed — full reinit
           lastMode = newMode;
           initZoom();
         } else if (nowMobile && newMode === 'mobile') {
-          // Still mobile: keep relative zoom but recompute base scale
           const oldBase = zoomState.baseScale;
           const newBase = computeBaseScale();
           if (oldBase > 0) {
@@ -811,7 +737,6 @@
           zoomState.baseScale = newBase;
           applyTransform();
         } else if (!nowMobile && newMode === 'desktop') {
-          // Still desktop — nothing to do
           resetForDesktop();
         }
       }
@@ -826,7 +751,6 @@
         resizeTimer = setTimeout(handleViewportChange, 200);
       });
 
-      // Also listen for media-query change (more reliable than resize in some browsers)
       const mq = window.matchMedia('(max-width: 768px)');
       if (mq.addEventListener) {
         mq.addEventListener('change', (e) => {
@@ -834,14 +758,13 @@
           initZoom();
         });
       } else if (mq.addListener) {
-        // Safari < 14
         mq.addListener((e) => {
           lastMode = e.matches ? 'mobile' : 'desktop';
           initZoom();
         });
       }
 
-      // Prevent native browser pinch/scroll on wrapper (mobile only)
+      // Prevent native pinch/scroll on wrapper (mobile only)
       iframeWrapper.addEventListener('touchmove', (e) => {
         if (zoomState.mode === 'mobile' && e.touches.length > 1) {
           e.preventDefault();
